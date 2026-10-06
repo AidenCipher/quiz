@@ -44,7 +44,10 @@ export async function startSession(c: C, userId: string): Promise<void> {
 
 export async function endSession(c: C): Promise<void> {
   const token = getCookie(c, COOKIE);
-  if (token) await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(await sha256Hex(token)).run();
+  if (token)
+    await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?')
+      .bind(await sha256Hex(token))
+      .run();
   deleteCookie(c, COOKIE, { path: '/' });
 }
 
@@ -54,7 +57,10 @@ export async function upsertUser(
   profile: { name: string; email?: string | null; picture?: string | null },
 ): Promise<string> {
   if (key.googleId) {
-    const existing = await db.prepare('SELECT id FROM users WHERE google_id = ?').bind(key.googleId).first<{ id: string }>();
+    const existing = await db
+      .prepare('SELECT id FROM users WHERE google_id = ?')
+      .bind(key.googleId)
+      .first<{ id: string }>();
     if (existing) {
       await db
         .prepare('UPDATE users SET name = ?, email = ?, picture = ? WHERE id = ?')
@@ -77,7 +83,13 @@ export function googleStartUrl(c: C): string | null {
   const clientId = c.env.GOOGLE_CLIENT_ID;
   if (!clientId) return null;
   const state = randomToken(16);
-  setCookie(c, 'qa_oauth_state', state, { httpOnly: true, secure: isSecure(c), sameSite: 'Lax', path: '/api/auth', maxAge: 600 });
+  setCookie(c, 'qa_oauth_state', state, {
+    httpOnly: true,
+    secure: isSecure(c),
+    sameSite: 'Lax',
+    path: '/api/auth',
+    maxAge: 600,
+  });
   const origin = new URL(c.req.url).origin;
   const p = new URLSearchParams({
     client_id: clientId,
@@ -117,9 +129,13 @@ export async function googleCallback(c: C): Promise<string | null> {
     email?: string;
     picture?: string;
   };
-  return upsertUser(c.env.DB, { googleId: payload.sub }, {
-    name: payload.name ?? payload.email ?? 'Host',
-    email: payload.email,
-    picture: payload.picture,
-  });
+  return upsertUser(
+    c.env.DB,
+    { googleId: payload.sub },
+    {
+      name: payload.name ?? payload.email ?? 'Host',
+      email: payload.email,
+      picture: payload.picture,
+    },
+  );
 }

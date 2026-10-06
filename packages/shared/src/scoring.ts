@@ -134,11 +134,6 @@ export interface Rankable {
 /** Higher score first; ties broken by lower total answer time. */
 export function rankPlayers<T extends Rankable>(players: T[]): (T & { rank: number })[] {
   return [...players]
-    .sort(
-      (a, b) =>
-        b.score - a.score ||
-        a.totalTimeMs - b.totalTimeMs ||
-        a.nickname.localeCompare(b.nickname),
-    )
+    .sort((a, b) => b.score - a.score || a.totalTimeMs - b.totalTimeMs || a.nickname.localeCompare(b.nickname))
     .map((p, i) => ({ ...p, rank: i + 1 }));
 }

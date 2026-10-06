@@ -23,5 +23,20 @@
   ],
   "triggers": { "crons": ["17 21 * * *"] },
   "observability": { "enabled": true },
-  "vars": { "DEV_LOGIN": "0" }
+  "vars": { "DEV_LOGIN": "0" },
+  "env": {
+    "staging": {
+      "name": "quiz-arena-staging",
+      "durable_objects": { "bindings": [{ "name": "GAME_ROOM", "class_name": "GameRoom" }] },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "quiz-arena-staging",
+          "database_id": "00000000-0000-0000-0000-000000000000",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "vars": { "DEV_LOGIN": "0" }
+    }
+  }
 }

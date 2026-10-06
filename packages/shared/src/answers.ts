@@ -42,11 +42,7 @@ export function allowedTypos(accepted: string): number {
   return n >= 10 ? 2 : n >= 5 ? 1 : 0;
 }
 
-export function matchesAnswer(
-  input: string,
-  accepted: readonly string[],
-  typoTolerance: boolean,
-): boolean {
+export function matchesAnswer(input: string, accepted: readonly string[], typoTolerance: boolean): boolean {
   const given = normalizeAnswer(input);
   if (!given) return false;
   const givenNum = asNumber(input);

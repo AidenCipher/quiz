@@ -15,7 +15,10 @@ const answer = z.object({
   t: z.literal('answer'),
   q: z.number().int().min(0),
   option: z.number().int().min(0).max(3).optional(),
-  text: z.string().max(MAX_ANSWER_TEXT * 2).optional(),
+  text: z
+    .string()
+    .max(MAX_ANSWER_TEXT * 2)
+    .optional(),
 });
 const presence = z.object({
   t: z.literal('presence'),
@@ -46,8 +49,19 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
 ]);
 export type ClientMsg = z.infer<typeof ClientMsgSchema>;
 export const HOST_ONLY = new Set([
-  'start', 'next', 'pause', 'resume', 'skip', 'extend', 'end',
-  'kick', 'overrideKick', 'rename', 'clearFlag', 'lockLobby', 'acceptAnswer',
+  'start',
+  'next',
+  'pause',
+  'resume',
+  'skip',
+  'extend',
+  'end',
+  'kick',
+  'overrideKick',
+  'rename',
+  'clearFlag',
+  'lockLobby',
+  'acceptAnswer',
 ]);
 
 /* ---------- server → client ---------- */
@@ -120,6 +134,7 @@ export type ServerMsg =
   | (Base & { t: 'joined'; playerId: string; token: string; nickname: string; avatar: string })
   | (Base & { t: 'hello'; role: 'host' | 'screen' | 'player'; pin: string; title: string })
   | (Base & { t: 'lobby'; pin: string; players: LobbyPlayer[]; locked: boolean; started: boolean })
+  | (Base & { t: 'roster'; players: LobbyPlayer[]; locked: boolean })
   | (Base & { t: 'getready'; index: number; total: number; endsAt: number })
   | (Base & {
       t: 'question';
@@ -147,6 +162,7 @@ export type ServerMsg =
   | (Base & {
       t: 'reveal';
       index: number;
+      total: number;
       qtype: z.infer<typeof QuestionTypeSchema>;
       correctOption: number | null;
       accepted: string[];
@@ -159,8 +175,19 @@ export type ServerMsg =
       you?: YouReveal;
       isLast: boolean;
     })
-  | (Base & { t: 'leaderboard'; index: number; top: BoardRow[]; you?: { rank: number; score: number; total: number; streak: number }; isLast: boolean })
-  | (Base & { t: 'podium'; top: BoardRow[]; you?: { rank: number; score: number; total: number }; results?: ResultsPayload })
+  | (Base & {
+      t: 'leaderboard';
+      index: number;
+      top: BoardRow[];
+      you?: { rank: number; score: number; total: number; streak: number };
+      isLast: boolean;
+    })
+  | (Base & {
+      t: 'podium';
+      top: BoardRow[];
+      you?: { rank: number; score: number; total: number };
+      results?: ResultsPayload;
+    })
   | (Base & { t: 'flag'; flag: FlagInfo })
   | (Base & { t: 'flagCleared'; flagId: string; playerId: string })
   | (Base & { t: 'warned'; flag: FlagInfo; strikesLeft: number })
@@ -172,12 +199,4 @@ export type ServerMsg =
   | (Base & { t: 'error'; code: ErrorCode; message: string });
 
 export type ErrorCode =
-  | 'not_found'
-  | 'locked'
-  | 'removed'
-  | 'bad_nickname'
-  | 'bad_message'
-  | 'forbidden'
-  | 'rate_limited'
-  | 'full'
-  | 'ended';
+  'not_found' | 'locked' | 'removed' | 'bad_nickname' | 'bad_message' | 'forbidden' | 'rate_limited' | 'full' | 'ended';

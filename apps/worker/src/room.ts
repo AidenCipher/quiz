@@ -120,8 +120,7 @@ const MAX_MSG_BYTES = 4096;
 const CLEANUP_AFTER_END_MS = 10 * 60_000;
 const IDLE_CLEANUP_MS = 6 * 60 * 60_000;
 
-const log = (event: string, data: Record<string, unknown> = {}) =>
-  console.log(JSON.stringify({ event, ...data }));
+const log = (event: string, data: Record<string, unknown> = {}) => console.log(JSON.stringify({ event, ...data }));
 
 export class GameRoom extends DurableObject<Env> {
   private state: GameState | null = null;
@@ -234,6 +233,10 @@ export class GameRoom extends DurableObject<Env> {
         server.serializeAttachment({ role, playerId: null } satisfies Attachment);
         this.send(server, { t: 'hello', role, pin: s.pin, title: s.title } as ServerMsg);
         this.send(server, this.phaseMsg({ role, playerId: null }));
+        if (s.phase !== 'lobby') {
+          this.send(server, { t: 'roster', players: this.lobbyPlayers(s), locked: s.locked } as ServerMsg);
+          for (const f of s.flags) this.send(server, { t: 'flag', flag: this.flagInfo(s, f) } as ServerMsg);
+        }
         if (role === 'host') this.sendPendingRemovals(server);
       } else {
         // Players identify themselves with a `join` message right after connecting.
@@ -421,7 +424,10 @@ export class GameRoom extends DurableObject<Env> {
       p = {
         id: crypto.randomUUID().slice(0, 8),
         tokenHash: await sha256Hex(token),
-        nickname: uniqueNickname(check.nickname, Object.values(s.players).map((x) => x.nickname)),
+        nickname: uniqueNickname(
+          check.nickname,
+          Object.values(s.players).map((x) => x.nickname),
+        ),
         avatar: isValidAvatar(msg.avatar) ? msg.avatar : DEFAULT_AVATAR,
         removed: false,
         awaySince: null,
@@ -600,7 +606,12 @@ export class GameRoom extends DurableObject<Env> {
     if (!s.settings.autoKick || p.kickOverridden || p.removed || p.pendingRemovalAt !== null) return;
     if (this.strikesOf(s, p.id) >= s.settings.kickStrikes) {
       p.pendingRemovalAt = now + KICK_OVERRIDE_MS;
-      const msg = { t: 'pendingRemoval', playerId: p.id, nickname: p.nickname, endsAt: p.pendingRemovalAt } as ServerMsg;
+      const msg = {
+        t: 'pendingRemoval',
+        playerId: p.id,
+        nickname: p.nickname,
+        endsAt: p.pendingRemovalAt,
+      } as ServerMsg;
       this.broadcast((r) => (r === 'player' ? undefined : msg));
     }
   }
@@ -610,7 +621,12 @@ export class GameRoom extends DurableObject<Env> {
     if (!s) return;
     for (const p of Object.values(s.players)) {
       if (p.pendingRemovalAt !== null && !p.removed) {
-        this.send(ws, { t: 'pendingRemoval', playerId: p.id, nickname: p.nickname, endsAt: p.pendingRemovalAt } as ServerMsg);
+        this.send(ws, {
+          t: 'pendingRemoval',
+          playerId: p.id,
+          nickname: p.nickname,
+          endsAt: p.pendingRemovalAt,
+        } as ServerMsg);
       }
     }
   }
@@ -658,7 +674,11 @@ export class GameRoom extends DurableObject<Env> {
       case 'start': {
         if (s.phase !== 'lobby') return;
         if (!this.activePlayers(s).length) {
-          this.broadcast((r) => (r === 'host' ? ({ t: 'error', code: 'bad_message', message: 'Wait for at least one player' } as ServerMsg) : undefined));
+          this.broadcast((r) =>
+            r === 'host'
+              ? ({ t: 'error', code: 'bad_message', message: 'Wait for at least one player' } as ServerMsg)
+              : undefined,
+          );
           return;
         }
         s.startedAt = now;
@@ -745,9 +765,17 @@ export class GameRoom extends DurableObject<Env> {
         if (!p || !check.ok) return;
         p.nickname = uniqueNickname(
           check.nickname,
-          Object.values(s.players).filter((x) => x.id !== p.id).map((x) => x.nickname),
+          Object.values(s.players)
+            .filter((x) => x.id !== p.id)
+            .map((x) => x.nickname),
         );
-        this.sendToPlayer(p.id, { t: 'joined', playerId: p.id, token: '', nickname: p.nickname, avatar: p.avatar } as ServerMsg);
+        this.sendToPlayer(p.id, {
+          t: 'joined',
+          playerId: p.id,
+          token: '',
+          nickname: p.nickname,
+          avatar: p.avatar,
+        } as ServerMsg);
         this.broadcastRoster();
         break;
       }
@@ -759,7 +787,9 @@ export class GameRoom extends DurableObject<Env> {
         if (p) {
           if (p.pendingRemovalAt !== null && this.strikesOf(s, p.id) < s.settings.kickStrikes) {
             p.pendingRemovalAt = null;
-            this.broadcast((r) => (r === 'player' ? undefined : ({ t: 'removalCancelled', playerId: p.id } as ServerMsg)));
+            this.broadcast((r) =>
+              r === 'player' ? undefined : ({ t: 'removalCancelled', playerId: p.id } as ServerMsg),
+            );
           }
         }
         this.broadcastAll({ t: 'flagCleared', flagId: f.id, playerId: f.playerId } as ServerMsg);
@@ -814,6 +844,7 @@ export class GameRoom extends DurableObject<Env> {
       if (this.isConnected(p.id)) this.pingAt.set(p.id, now);
     }
     this.broadcastPhase();
+    this.broadcastProgress();
   }
 
   /** Evaluate players who are still away so the time up to `now` is graded, then restart their clock. */
@@ -897,7 +928,11 @@ export class GameRoom extends DurableObject<Env> {
 
   private isCorrect(s: GameState, q: Question, i: number, a: AnswerRec): boolean {
     if (q.type === 'text') {
-      return matchesAnswer(a.text ?? '', [...q.acceptedAnswers, ...(s.extraAccepted[i] ?? [])], q.typoTolerance && s.settings.typoTolerance);
+      return matchesAnswer(
+        a.text ?? '',
+        [...q.acceptedAnswers, ...(s.extraAccepted[i] ?? [])],
+        q.typoTolerance && s.settings.typoTolerance,
+      );
     }
     return a.option !== undefined && a.option === q.correctIndex;
   }
@@ -916,7 +951,12 @@ export class GameRoom extends DurableObject<Env> {
     const ranked = rankPlayers(
       players
         .filter((p) => !p.removed)
-        .map((p) => ({ id: p.id, nickname: p.nickname, score: scores[p.id]!.score, totalTimeMs: scores[p.id]!.totalTimeMs })),
+        .map((p) => ({
+          id: p.id,
+          nickname: p.nickname,
+          score: scores[p.id]!.score,
+          totalTimeMs: scores[p.id]!.totalTimeMs,
+        })),
     );
     return { scores, ranked };
   }
@@ -994,7 +1034,15 @@ export class GameRoom extends DurableObject<Env> {
       await this.env.DB.prepare(
         'INSERT INTO game_results (id, quiz_id, host_id, pin, started_at, ended_at, results) VALUES (?, ?, ?, ?, ?, ?, ?)',
       )
-        .bind(crypto.randomUUID(), s.quizId, s.hostId, s.pin, s.startedAt, s.endedAt ?? Date.now(), JSON.stringify(this.buildResults(s)))
+        .bind(
+          crypto.randomUUID(),
+          s.quizId,
+          s.hostId,
+          s.pin,
+          s.startedAt,
+          s.endedAt ?? Date.now(),
+          JSON.stringify(this.buildResults(s)),
+        )
         .run();
       log('results_saved', { pin: s.pin });
     } catch (e) {
@@ -1022,7 +1070,14 @@ export class GameRoom extends DurableObject<Env> {
 
     switch (s.phase) {
       case 'lobby':
-        return { ...base, t: 'lobby', pin: s.pin, players: isPlayer ? [] : this.lobbyPlayers(s), locked: s.locked, started: s.startedAt !== null };
+        return {
+          ...base,
+          t: 'lobby',
+          pin: s.pin,
+          players: isPlayer ? [] : this.lobbyPlayers(s),
+          locked: s.locked,
+          started: s.startedAt !== null,
+        };
       case 'getready':
         return { ...base, t: 'getready', index: s.qIndex, total: s.questionCount, endsAt: s.getReadyEndsAt };
       case 'question': {
@@ -1049,7 +1104,12 @@ export class GameRoom extends DurableObject<Env> {
             allowChange: s.settings.allowAnswerChange,
           };
         }
-        return { ...common, text: q!.text, image: q!.image, options: q!.type === 'tf' ? ['True', 'False'] : q!.options };
+        return {
+          ...common,
+          text: q!.text,
+          image: q!.image,
+          options: q!.type === 'tf' ? ['True', 'False'] : q!.options,
+        };
       }
       case 'reveal':
         return this.revealMsg(s, who);
@@ -1061,7 +1121,10 @@ export class GameRoom extends DurableObject<Env> {
           t: 'leaderboard',
           index: s.qIndex,
           top: this.boardRows(s, ranked, 5),
-          you: me && pid ? { rank: me.rank, score: me.score, total: ranked.length, streak: scores[pid]!.streak } : undefined,
+          you:
+            me && pid
+              ? { rank: me.rank, score: me.score, total: ranked.length, streak: scores[pid]!.streak }
+              : undefined,
           isLast: s.qIndex + 1 >= s.questionCount,
         };
       }
@@ -1135,6 +1198,7 @@ export class GameRoom extends DurableObject<Env> {
       serverTime: Date.now(),
       t: 'reveal',
       index: i,
+      total: s.questionCount,
       qtype: q.type,
       correctOption: q.type === 'text' ? null : q.correctIndex,
       accepted: q.type === 'text' ? accepted : [],
@@ -1218,10 +1282,15 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
+  /** Lobby: the full lobby message. Later phases: a lightweight `roster` for the host's moderation panel. */
   private broadcastRoster(): void {
     const s = this.state;
-    if (!s || s.phase !== 'lobby') return;
-    const msg = { t: 'lobby', pin: s.pin, players: this.lobbyPlayers(s), locked: s.locked, started: s.startedAt !== null } as ServerMsg;
+    if (!s) return;
+    const msg = (
+      s.phase === 'lobby'
+        ? { t: 'lobby', pin: s.pin, players: this.lobbyPlayers(s), locked: s.locked, started: s.startedAt !== null }
+        : { t: 'roster', players: this.lobbyPlayers(s), locked: s.locked }
+    ) as ServerMsg;
     this.broadcast((r) => (r === 'player' ? undefined : msg));
   }
 

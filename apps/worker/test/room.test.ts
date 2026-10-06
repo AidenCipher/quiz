@@ -101,7 +101,10 @@ describe('connections and joining', () => {
 
   it('rejects a ticket for another game', async () => {
     const { stub } = await makeGame();
-    const ticket = await signTicket({ pin: '999999', role: 'host', uid: 'host-1', exp: Date.now() + 60_000 }, env.SESSION_SECRET);
+    const ticket = await signTicket(
+      { pin: '999999', role: 'host', uid: 'host-1', exp: Date.now() + 60_000 },
+      env.SESSION_SECRET,
+    );
     const c = await open(stub, `role=host&ticket=${ticket}`);
     expect((await c.waitFor((m) => m.t === 'error')).code).toBe('forbidden');
   });
@@ -242,7 +245,9 @@ describe('a full game', () => {
     const pod = await host.waitFor((m) => m.t === 'podium');
     expect(pod.top[0].nickname).toBe('Ann');
     expect(pod.results.players).toHaveLength(2);
-    const saved = await env.DB.prepare('SELECT results FROM game_results WHERE pin = ?').bind(pin).first<{ results: string }>();
+    const saved = await env.DB.prepare('SELECT results FROM game_results WHERE pin = ?')
+      .bind(pin)
+      .first<{ results: string }>();
     expect(JSON.parse(saved!.results).players[0].nickname).toBe('Ann');
     expect((await a.waitFor((m) => m.t === 'podium')).you.rank).toBe(1);
   });
@@ -264,7 +269,12 @@ describe('a full game', () => {
   });
 
   it('supports type-the-answer with typo tolerance, and the host can accept another answer', async () => {
-    const txt: Question = { ...newQuestion('text'), text: 'Capital of Maharashtra?', acceptedAnswers: ['Mumbai', 'Bombay'], timeLimitS: 30 };
+    const txt: Question = {
+      ...newQuestion('text'),
+      text: 'Capital of Maharashtra?',
+      acceptedAnswers: ['Mumbai', 'Bombay'],
+      timeLimitS: 30,
+    };
     const { stub, pin } = await makeGame({ questions: [txt] });
     const host = await openHost(stub, pin);
     const a = await join(stub, 'Ann');

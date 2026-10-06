@@ -1,8 +1,6 @@
 import { Hono } from 'hono';
 import { QuizDraftSchema, QuizSchema } from '@quiz/shared';
-import {
-  currentUser, endSession, googleCallback, googleStartUrl, startSession, upsertUser, type User,
-} from './auth';
+import { currentUser, endSession, googleCallback, googleStartUrl, startSession, upsertUser, type User } from './auth';
 import { signTicket } from './crypto';
 import { getQuiz, listQuizzes, saveQuiz } from './db';
 import type { Env } from './env';
@@ -131,7 +129,9 @@ host.put('/quizzes/:id', async (c) => {
 });
 
 host.delete('/quizzes/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM quizzes WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  await c.env.DB.prepare('DELETE FROM quizzes WHERE id = ? AND owner_id = ?')
+    .bind(c.req.param('id'), c.get('user').id)
+    .run();
   return c.json({ ok: true });
 });
 
@@ -143,11 +143,15 @@ host.post('/quizzes/:id/host', async (c) => {
   const parsed = QuizSchema.safeParse({ title: row.title, settings: row.settings, questions: row.questions });
   if (!parsed.success) return c.json({ error: 'quiz incomplete', issues: parsed.error.issues }, 422);
 
-  await c.env.DB.prepare('DELETE FROM live_games WHERE created_at < ?').bind(Date.now() - 12 * 3600_000).run();
+  await c.env.DB.prepare('DELETE FROM live_games WHERE created_at < ?')
+    .bind(Date.now() - 12 * 3600_000)
+    .run();
   let pin = '';
   for (let attempt = 0; attempt < 20; attempt++) {
     const candidate = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0]! % 900000));
-    const res = await c.env.DB.prepare('INSERT OR IGNORE INTO live_games (pin, quiz_id, host_id, created_at) VALUES (?,?,?,?)')
+    const res = await c.env.DB.prepare(
+      'INSERT OR IGNORE INTO live_games (pin, quiz_id, host_id, created_at) VALUES (?,?,?,?)',
+    )
       .bind(candidate, row.id, user.id, Date.now())
       .run();
     if (res.meta.changes === 1) {
@@ -177,7 +181,9 @@ host.post('/quizzes/:id/host', async (c) => {
 host.post('/games/:pin/ticket', async (c) => {
   const pin = c.req.param('pin');
   const role = c.req.query('role') === 'screen' ? 'screen' : 'host';
-  const live = await c.env.DB.prepare('SELECT host_id FROM live_games WHERE pin = ?').bind(pin).first<{ host_id: string }>();
+  const live = await c.env.DB.prepare('SELECT host_id FROM live_games WHERE pin = ?')
+    .bind(pin)
+    .first<{ host_id: string }>();
   if (!live || live.host_id !== c.get('user').id) return c.json({ error: 'not found' }, 404);
   const ticket = await signTicket({ pin, role, uid: live.host_id, exp: Date.now() + 60_000 }, c.env.SESSION_SECRET);
   return c.json({ ticket });
@@ -204,7 +210,9 @@ host.get('/results/:id', async (c) => {
 
 app.route('/api', host);
 
-app.notFound((c) => (c.req.path.startsWith('/api/') ? c.json({ error: 'not found' }, 404) : c.env.ASSETS.fetch(c.req.raw)));
+app.notFound((c) =>
+  c.req.path.startsWith('/api/') ? c.json({ error: 'not found' }, 404) : c.env.ASSETS.fetch(c.req.raw),
+);
 
 export default {
   fetch: app.fetch,

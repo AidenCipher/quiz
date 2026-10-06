@@ -6,13 +6,66 @@ import { NICKNAME_MAX, NICKNAME_MIN } from './constants';
  * Extend the lists (including transliterated Hindi/Kannada) as needed.
  */
 const STEMS = [
-  'fuck', 'shit', 'bitch', 'bastard', 'asshole', 'whore', 'slut', 'nigg', 'fagg',
-  'retard', 'rapist', 'nazi', 'pussy', 'wanker', 'twat', 'porn',
-  'chutiya', 'madarchod', 'bhosd', 'gaandu', 'bhenchod', 'behenchod', 'harami', 'kutta', 'kamine',
+  'fuck',
+  'shit',
+  'bitch',
+  'bastard',
+  'asshole',
+  'whore',
+  'slut',
+  'nigg',
+  'fagg',
+  'retard',
+  'rapist',
+  'nazi',
+  'pussy',
+  'wanker',
+  'twat',
+  'porn',
+  'chutiya',
+  'madarchod',
+  'bhosd',
+  'gaandu',
+  'bhenchod',
+  'behenchod',
+  'harami',
+  'kutta',
+  'kamine',
 ];
-const WORDS = ['dick', 'cunt', 'cunts', 'cock', 'cocks', 'ass', 'sex', 'fag', 'rape', 'tit', 'tits', 'cum', 'anal', 'hoe', 'dildo', 'lund', 'randi', 'gand', 'bc', 'mc'];
+const WORDS = [
+  'dick',
+  'cunt',
+  'cunts',
+  'cock',
+  'cocks',
+  'ass',
+  'sex',
+  'fag',
+  'rape',
+  'tit',
+  'tits',
+  'cum',
+  'anal',
+  'hoe',
+  'dildo',
+  'lund',
+  'randi',
+  'gand',
+  'bc',
+  'mc',
+];
 
-const LEET: Record<string, string> = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '@': 'a', $: 's', '!': 'i' };
+const LEET: Record<string, string> = {
+  '0': 'o',
+  '1': 'i',
+  '3': 'e',
+  '4': 'a',
+  '5': 's',
+  '7': 't',
+  '@': 'a',
+  $: 's',
+  '!': 'i',
+};
 
 function squash(text: string): string {
   const mapped = text
@@ -38,7 +91,10 @@ export function isProfane(text: string): boolean {
 }
 
 export function cleanNickname(raw: string): string {
-  return raw.replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim();
+  return raw
+    .replace(/[\p{Cc}<>]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export type NicknameCheck = { ok: true; nickname: string } | { ok: false; reason: 'length' | 'profane' };

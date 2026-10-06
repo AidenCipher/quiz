@@ -42,12 +42,7 @@ export async function verifyTicket(ticket: string, secret: string): Promise<Tick
   const [body, sig] = ticket.split('.');
   if (!body || !sig) return null;
   try {
-    const ok = await crypto.subtle.verify(
-      'HMAC',
-      await hmacKey(secret, 'verify'),
-      fromB64url(sig),
-      enc.encode(body),
-    );
+    const ok = await crypto.subtle.verify('HMAC', await hmacKey(secret, 'verify'), fromB64url(sig), enc.encode(body));
     if (!ok) return null;
     const claims = JSON.parse(new TextDecoder().decode(fromB64url(body))) as TicketClaims;
     return claims.exp > Date.now() ? claims : null;

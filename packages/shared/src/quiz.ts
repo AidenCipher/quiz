@@ -1,11 +1,5 @@
 import { z } from 'zod';
-import {
-  MAX_ACCEPTED_ANSWERS,
-  MAX_QUESTIONS,
-  MAX_QUESTION_TEXT,
-  TIMER_OPTIONS,
-  POINT_OPTIONS,
-} from './constants';
+import { MAX_ACCEPTED_ANSWERS, MAX_QUESTIONS, MAX_QUESTION_TEXT, TIMER_OPTIONS, POINT_OPTIONS } from './constants';
 
 export const QuestionTypeSchema = z.enum(['mcq', 'tf', 'text']);
 export type QuestionType = z.infer<typeof QuestionTypeSchema>;
@@ -46,12 +40,8 @@ export const GameSettingsSchema = z.object({
 export type GameSettings = z.infer<typeof GameSettingsSchema>;
 export const defaultSettings = (): GameSettings => GameSettingsSchema.parse({});
 
-const timer = z
-  .number()
-  .refine((n) => (TIMER_OPTIONS as readonly number[]).includes(n), 'invalid timer');
-const points = z
-  .number()
-  .refine((n) => (POINT_OPTIONS as readonly number[]).includes(n), 'invalid points');
+const timer = z.number().refine((n) => (TIMER_OPTIONS as readonly number[]).includes(n), 'invalid timer');
+const points = z.number().refine((n) => (POINT_OPTIONS as readonly number[]).includes(n), 'invalid points');
 
 export const QuestionSchema = z
   .object({

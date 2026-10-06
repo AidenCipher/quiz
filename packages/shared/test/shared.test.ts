@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
-  answerPoints, streakBonus, scoreGame, rankPlayers, matchesAnswer, normalizeAnswer,
-  gradeFlag, defaultSettings, parseAvatar, encodeAvatar, randomAvatar, checkNickname,
-  uniqueNickname, QuestionSchema, newQuestion, ClientMsgSchema, type QuestionMeta,
+  answerPoints,
+  streakBonus,
+  scoreGame,
+  rankPlayers,
+  matchesAnswer,
+  normalizeAnswer,
+  gradeFlag,
+  defaultSettings,
+  parseAvatar,
+  encodeAvatar,
+  randomAvatar,
+  checkNickname,
+  uniqueNickname,
+  QuestionSchema,
+  newQuestion,
+  ClientMsgSchema,
+  type QuestionMeta,
 } from '../src';
 
 const T = defaultSettings().thresholds;
@@ -28,7 +42,11 @@ describe('scoring', () => {
 
   it('scores streaks and breaks them on a miss', () => {
     const r = scoreGame({
-      questions: qs, closed: 3, playerIds: ['a'], flags: [], settings,
+      questions: qs,
+      closed: 3,
+      playerIds: ['a'],
+      flags: [],
+      settings,
       answers: { 0: { a: { option: 1, tMs: 0 } }, 1: { a: { option: 1, tMs: 0 } }, 2: { a: { option: 0, tMs: 0 } } },
     }).a!;
     expect(r.score).toBe(1000 + 1100);
@@ -37,7 +55,10 @@ describe('scoring', () => {
   });
   it('moderate flag voids the answer, major also deducts; clearing refunds', () => {
     const base = {
-      questions: qs, closed: 1, playerIds: ['a'], settings,
+      questions: qs,
+      closed: 1,
+      playerIds: ['a'],
+      settings,
       answers: { 0: { a: { option: 1, tMs: 0 } } },
     };
     const mk = (severity: 'minor' | 'moderate' | 'major', cleared = false) => [
@@ -52,7 +73,10 @@ describe('scoring', () => {
   });
   it('major deduction can reduce earlier points', () => {
     const r = scoreGame({
-      questions: qs, closed: 2, playerIds: ['a'], settings,
+      questions: qs,
+      closed: 2,
+      playerIds: ['a'],
+      settings,
       answers: { 0: { a: { option: 1, tMs: 0 } }, 1: { a: { option: 1, tMs: 0 } } },
       flags: [{ id: 'f', playerId: 'a', q: 1, severity: 'major', cleared: false }],
     }).a!;
