@@ -417,6 +417,43 @@ describe('anti-cheat', () => {
   });
 });
 
+describe('right to erasure', () => {
+  it('a player can erase themselves: gone from the roster, answers, flags and saved results', async () => {
+    const { stub, pin } = await makeGame({ questions: [mcq('Q1', 1)] });
+    const host = await openHost(stub, pin);
+    const a = await join(stub, 'Ann');
+    const b = await join(stub, 'Bob');
+    host.send({ t: 'start' });
+    await host.waitFor((m) => m.t === 'getready');
+    host.send({ t: 'skip' });
+    await a.waitFor((m) => m.t === 'question');
+    a.send({ t: 'answer', q: 0, option: 1 });
+    await a.waitFor((m) => m.t === 'answerAck' && m.ok);
+    a.send({ t: 'leave' });
+    await a.waitFor((m) => m.t === 'left');
+    await a.waitFor(() => a.closed);
+    const stored = await runInDurableObject(stub, async (_i, state) => state.storage.get<any>('game'));
+    expect(stored.players[a.playerId]).toBeUndefined();
+    expect(stored.answers[0][a.playerId]).toBeUndefined();
+    expect(JSON.stringify(stored)).not.toContain('Ann');
+    // The remaining player still finishes the game, and the saved results never mention Ann.
+    b.send({ t: 'answer', q: 0, option: 1 });
+    await host.waitFor((m) => m.t === 'reveal');
+    host.send({ t: 'next' });
+    await host.waitFor((m) => m.t === 'leaderboard');
+    host.send({ t: 'next' });
+    const pod = await host.waitFor((m) => m.t === 'podium');
+    expect(pod.results.players.map((p: Msg) => p.nickname)).toEqual(['Bob']);
+    const saved = await env.DB.prepare('SELECT results FROM game_results WHERE pin = ?')
+      .bind(pin)
+      .first<{ results: string }>();
+    expect(saved!.results).not.toContain('Ann');
+    // Their old token no longer works.
+    const back = await join(stub, 'Ann', { playerId: a.playerId, token: a.token });
+    expect(back.last('joined')!.playerId).not.toBe(a.playerId);
+  });
+});
+
 describe('host controls', () => {
   it('pause freezes the clock; resume gives back the remaining time; extend adds 10s', async () => {
     const { stub, pin } = await makeGame({ questions: [mcq('Q', 0, 5)] });

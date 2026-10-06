@@ -21,7 +21,7 @@ test('home, join form and host sign-in have no WCAG A/AA violations', async ({ b
 
   const { pin, context } = await startGame(browser);
   await page.goto(`/j/${pin}`);
-  await expect(page.getByLabel('Nickname')).toBeVisible();
+  await expect(page.getByLabel('Nickname', { exact: true })).toBeVisible();
   await scan(page);
   await Promise.all([ctx.close(), context.close()]);
 });

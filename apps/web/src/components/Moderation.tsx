@@ -2,7 +2,9 @@ import type { ClientMsg, FlagInfo, LobbyPlayer } from '@quiz/shared/protocol';
 import { useState } from 'react';
 import { useServerNow } from '../lib/hooks';
 import { useGame } from '../lib/store';
+import { useDialog } from '../lib/useDialog';
 import { Avatar } from './Avatar';
+import { ConfirmDialog } from './Dialogs';
 
 const SEV_COLOR = { minor: '#f2b01e', moderate: '#f97316', major: '#ef4444' } as const;
 
@@ -57,6 +59,8 @@ export function ModerationDrawer({ send, onClose }: { send: (m: ClientMsg) => vo
   const roster = useGame((s) => s.roster);
   const flags = useGame((s) => s.flags);
   const locked = useGame((s) => s.locked);
+  const ref = useDialog<HTMLElement>(true, onClose, { trap: false });
+  const [kicking, setKicking] = useState<LobbyPlayer | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [name, setName] = useState('');
   const live = flags
@@ -71,6 +75,8 @@ export function ModerationDrawer({ send, onClose }: { send: (m: ClientMsg) => vo
   };
   return (
     <aside
+      ref={ref}
+      tabIndex={-1}
       aria-label="Moderation"
       style={{
         position: 'absolute',
@@ -173,18 +179,28 @@ export function ModerationDrawer({ send, onClose }: { send: (m: ClientMsg) => vo
               >
                 Rename
               </button>
-              <button
-                className="btn btn-danger"
-                onClick={() => {
-                  if (confirm(`Remove ${p.nickname} from the game?`)) send({ t: 'kick', playerId: p.id });
-                }}
-              >
+              <button className="btn btn-danger" onClick={() => setKicking(p)}>
                 Kick
               </button>
             </>
           )}
         </div>
       ))}
+      {kicking && (
+        <ConfirmDialog
+          dark
+          danger
+          title={`Remove ${kicking.nickname}?`}
+          confirmLabel="Remove player"
+          onCancel={() => setKicking(null)}
+          onConfirm={() => {
+            send({ t: 'kick', playerId: kicking.id });
+            setKicking(null);
+          }}
+        >
+          They are taken out of the game and cannot rejoin.
+        </ConfirmDialog>
+      )}
     </aside>
   );
 }

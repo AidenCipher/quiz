@@ -11,17 +11,24 @@ export { GameRoom } from './room';
 type Vars = { user: User };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
-/* ---- tiny per-isolate rate limiter (join/PIN guessing) ---- */
-const hits = new Map<string, { n: number; reset: number }>();
-function limited(key: string, max: number, windowMs: number): boolean {
+/*
+ * PIN-guessing limiter. Only FAILED lookups count: a whole classroom shares one IP (NAT), so counting
+ * successful joins would lock students out, while a guesser produces mostly misses.
+ */
+const misses = new Map<string, { n: number; reset: number }>();
+const MISS_LIMIT = 30;
+const MISS_WINDOW_MS = 60_000;
+function blocked(key: string): boolean {
+  const h = misses.get(key);
+  return !!h && Date.now() <= h.reset && h.n >= MISS_LIMIT;
+}
+function recordMiss(key: string): void {
   const now = Date.now();
-  const h = hits.get(key);
+  const h = misses.get(key);
   if (!h || now > h.reset) {
-    if (hits.size > 5000) hits.clear();
-    hits.set(key, { n: 1, reset: now + windowMs });
-    return false;
-  }
-  return ++h.n > max;
+    if (misses.size > 5000) misses.clear();
+    misses.set(key, { n: 1, reset: now + MISS_WINDOW_MS });
+  } else h.n++;
 }
 const ip = (req: Request) => req.headers.get('cf-connecting-ip') ?? 'local';
 
@@ -34,9 +41,15 @@ app.get('/api/health', (c) => c.json({ ok: true }));
 
 app.get('/api/games/:pin', async (c) => {
   const pin = c.req.param('pin');
-  if (!validPin(pin) || limited(`pin:${ip(c.req.raw)}`, 30, 60_000)) return c.json({ exists: false }, 404);
-  const live = await c.env.DB.prepare('SELECT 1 FROM live_games WHERE pin = ?').bind(pin).first();
-  if (!live) return c.json({ exists: false }, 404);
+  const key = `miss:${ip(c.req.raw)}`;
+  if (blocked(key)) return c.json({ exists: false, error: 'too many attempts' }, 429);
+  const live = validPin(pin)
+    ? await c.env.DB.prepare('SELECT 1 FROM live_games WHERE pin = ?').bind(pin).first()
+    : null;
+  if (!live) {
+    recordMiss(key);
+    return c.json({ exists: false }, 404);
+  }
   return roomStub(c.env, pin).fetch('http://room/info');
 });
 
@@ -44,15 +57,20 @@ app.get('/ws/:pin', async (c) => {
   const pin = c.req.param('pin');
   if (!validPin(pin)) return c.text('bad pin', 400);
   const role = c.req.query('role') ?? 'player';
-  if (role === 'player' && limited(`ws:${ip(c.req.raw)}`, 120, 60_000)) return c.text('rate limited', 429);
+  const key = `miss:${ip(c.req.raw)}`;
+  if (role === 'player' && blocked(key)) return c.text('too many attempts', 429);
   const live = await c.env.DB.prepare('SELECT 1 FROM live_games WHERE pin = ?').bind(pin).first();
-  if (!live) return c.text('not found', 404);
+  if (!live) {
+    recordMiss(key);
+    return c.text('not found', 404);
+  }
   const url = new URL(c.req.url);
   return roomStub(c.env, pin).fetch(new Request(`http://room/ws${url.search}`, c.req.raw));
 });
 
 app.post('/api/log', async (c) => {
-  const body = (await c.req.text()).slice(0, 2000);
+  // Client errors only: no IP, no cookies, and game PINs are scrubbed from the text.
+  const body = (await c.req.text()).slice(0, 2000).replace(/\d{6}/g, '######');
   console.log(JSON.stringify({ event: 'client_error', body }));
   return c.body(null, 204);
 });
@@ -129,6 +147,9 @@ host.put('/quizzes/:id', async (c) => {
 });
 
 host.delete('/quizzes/:id', async (c) => {
+  await c.env.DB.prepare('DELETE FROM questions WHERE quiz_id = (SELECT id FROM quizzes WHERE id = ? AND owner_id = ?)')
+    .bind(c.req.param('id'), c.get('user').id)
+    .run();
   await c.env.DB.prepare('DELETE FROM quizzes WHERE id = ? AND owner_id = ?')
     .bind(c.req.param('id'), c.get('user').id)
     .run();
@@ -138,6 +159,9 @@ host.delete('/quizzes/:id', async (c) => {
 /** Open a lobby: validates the quiz strictly, allocates a PIN, boots the game room. */
 host.post('/quizzes/:id/host', async (c) => {
   const user = c.get('user');
+  // Hosts must confirm they may run this with their audience (consent for children comes from school/parents).
+  const body = await c.req.json<{ audienceConsent?: boolean }>().catch(() => ({}) as { audienceConsent?: boolean });
+  if (body.audienceConsent !== true) return c.json({ error: 'audience consent required' }, 400);
   const row = await getQuiz(c.env.DB, c.req.param('id'), user.id);
   if (!row) return c.json({ error: 'not found' }, 404);
   const parsed = QuizSchema.safeParse({ title: row.title, settings: row.settings, questions: row.questions });
@@ -206,6 +230,49 @@ host.get('/results/:id', async (c) => {
     .bind(c.req.param('id'), c.get('user').id)
     .first<{ results: string }>();
   return row ? c.json(JSON.parse(row.results)) : c.json({ error: 'not found' }, 404);
+});
+
+/* ---- data rights: export, delete results, delete account ---- */
+
+host.get('/me/export', async (c) => {
+  const user = c.get('user');
+  const quizzes = await listQuizzes(c.env.DB, user.id);
+  const full = [];
+  for (const q of quizzes) full.push(await getQuiz(c.env.DB, q.id, user.id));
+  const { results } = await c.env.DB.prepare(
+    'SELECT id, pin, started_at, ended_at, results FROM game_results WHERE host_id = ?',
+  )
+    .bind(user.id)
+    .all<{ id: string; pin: string; started_at: number | null; ended_at: number; results: string }>();
+  c.header('content-disposition', 'attachment; filename="quiz-arena-my-data.json"');
+  return c.json({
+    exportedAt: new Date().toISOString(),
+    account: { id: user.id, name: user.name },
+    quizzes: full,
+    gameResults: results.map((r) => ({ ...r, results: JSON.parse(r.results) })),
+  });
+});
+
+host.delete('/results/:id', async (c) => {
+  await c.env.DB.prepare('DELETE FROM game_results WHERE id = ? AND host_id = ?')
+    .bind(c.req.param('id'), c.get('user').id)
+    .run();
+  return c.json({ ok: true });
+});
+
+/** Erase the account and everything attached to it. Players' game data lives only in results (host-owned). */
+host.delete('/me', async (c) => {
+  const uid = c.get('user').id;
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM game_results WHERE host_id = ?').bind(uid),
+    c.env.DB.prepare('DELETE FROM live_games WHERE host_id = ?').bind(uid),
+    c.env.DB.prepare('DELETE FROM questions WHERE quiz_id IN (SELECT id FROM quizzes WHERE owner_id = ?)').bind(uid),
+    c.env.DB.prepare('DELETE FROM quizzes WHERE owner_id = ?').bind(uid),
+    c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(uid),
+    c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(uid),
+  ]);
+  await endSession(c);
+  return c.json({ ok: true });
 });
 
 app.route('/api', host);

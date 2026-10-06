@@ -34,6 +34,8 @@ export interface GameView {
   error: { code: string; message: string } | null;
   ended: boolean;
   removed: boolean;
+  /** the player erased themselves from the game */
+  erased: boolean;
   ack: { q: number; ok: boolean; reason?: string } | null;
   /** nicknames of removed players by id (for the big screen escort). */
   removedIds: Record<string, string>;
@@ -57,6 +59,7 @@ export const initialView = (): GameView => ({
   error: null,
   ended: false,
   removed: false,
+  erased: false,
   ack: null,
   removedIds: {},
 });
@@ -157,6 +160,8 @@ export function reduce(v: GameView, msg: ServerMsg, now = Date.now()): GameView 
     }
     case 'ended':
       return { ...v, ended: true };
+    case 'left':
+      return { ...v, erased: true, me: null };
     case 'error':
       return { ...v, error: { code: msg.code, message: msg.message } };
     case 'pong':

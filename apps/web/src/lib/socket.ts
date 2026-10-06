@@ -23,6 +23,13 @@ export const saveIdentity = (pin: string, id: PlayerIdentity) => {
     /* private mode */
   }
 };
+export const clearIdentity = (pin: string) => {
+  try {
+    localStorage.removeItem(idKey(pin));
+  } catch {
+    /* ignore */
+  }
+};
 export const loadProfile = (): { nickname: string; avatar: string } | null => {
   try {
     return JSON.parse(localStorage.getItem('qa:profile') ?? 'null');

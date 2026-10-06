@@ -139,6 +139,7 @@ export function QuestionLayout(props: {
   qtype: 'mcq' | 'tf' | 'text';
   text: string;
   image?: string | null;
+  imageAlt?: string;
   options: string[];
   remainingMs: number;
   limitMs: number;
@@ -196,7 +197,7 @@ export function QuestionLayout(props: {
         {image ? (
           <img
             src={image}
-            alt=""
+            alt={props.imageAlt || ''}
             style={{ maxHeight: 360, maxWidth: '100%', borderRadius: 16, objectFit: 'contain' }}
           />
         ) : qtype === 'text' && !reveal ? (
@@ -348,6 +349,7 @@ function Question({ phase }: { phase: Extract<PhaseMsg, { t: 'question' }> }) {
         qtype={phase.qtype}
         text={phase.text ?? ''}
         image={phase.image}
+        imageAlt={phase.imageAlt}
         options={phase.options ?? []}
         remainingMs={remaining}
         limitMs={phase.limitMs}
@@ -438,6 +440,7 @@ function Reveal({
           qtype={phase.qtype}
           text={phase.text ?? ''}
           image={phase.image}
+          imageAlt={phase.imageAlt}
           options={phase.options ?? []}
           remainingMs={0}
           limitMs={1}

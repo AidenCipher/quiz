@@ -172,6 +172,15 @@ describe('avatar, nickname, schemas', () => {
     expect(QuestionSchema.safeParse({ ...newQuestion('text'), text: 'Q', acceptedAnswers: ['x'] }).success).toBe(true);
     expect(QuestionSchema.safeParse({ ...newQuestion('tf'), text: 'Q', correctIndex: 2 }).success).toBe(false);
   });
+  it('requires alt text for question images', () => {
+    const q = { ...newQuestion('tf'), text: 'Q', correctIndex: 0, image: 'data:image/png;base64,AAAA' };
+    expect(QuestionSchema.safeParse(q).success).toBe(false);
+    expect(QuestionSchema.safeParse({ ...q, imageAlt: 'A map of India' }).success).toBe(true);
+    expect(QuestionSchema.safeParse({ ...q, image: null }).success).toBe(true);
+  });
+  it('accepts a leave (erasure) message', () => {
+    expect(ClientMsgSchema.safeParse({ t: 'leave' }).success).toBe(true);
+  });
   it('drops malformed protocol messages', () => {
     expect(ClientMsgSchema.safeParse({ t: 'answer', q: 0, option: 9 }).success).toBe(false);
     expect(ClientMsgSchema.safeParse({ t: 'answer', q: 0, option: 2 }).success).toBe(true);

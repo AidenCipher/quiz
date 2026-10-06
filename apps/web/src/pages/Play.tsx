@@ -4,10 +4,13 @@ import type { FlagInfo } from '@quiz/shared/protocol';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Avatar, AvatarBuilder } from '../components/Avatar';
+import { Footer, SkipLink } from '../components/Chrome';
+import { ConfirmDialog } from '../components/Dialogs';
 import { api } from '../lib/api';
 import { useCountdown } from '../lib/hooks';
 import {
   GameSocket,
+  clearIdentity,
   loadIdentity,
   loadProfile,
   resetClock,
@@ -16,6 +19,7 @@ import {
   type PlayerIdentity,
 } from '../lib/socket';
 import { useGame } from '../lib/store';
+import { useDialog } from '../lib/useDialog';
 import { acquireWakeLock, releaseWakeLock } from '../lib/wakelock';
 
 type Gate = 'checking' | 'form' | 'playing' | 'missing' | 'locked';
@@ -25,14 +29,17 @@ export default function Play() {
   const [gate, setGate] = useState<Gate>('checking');
   const sock = useRef<GameSocket | null>(null);
   const identity = useRef<PlayerIdentity | null>(null);
+  const remember = useRef(false);
   const me = useGame((s) => s.me);
   const error = useGame((s) => s.error);
   const removed = useGame((s) => s.removed);
   const ended = useGame((s) => s.ended);
+  const erased = useGame((s) => s.erased);
 
   const start = useCallback(
-    (id: PlayerIdentity) => {
+    (id: PlayerIdentity, rememberMe = false) => {
       identity.current = id;
+      remember.current = rememberMe;
       useGame.getState().reset();
       resetClock();
       sock.current?.close();
@@ -41,7 +48,7 @@ export default function Play() {
         onIdentity: (next) => {
           identity.current = { ...identity.current, ...next };
           saveIdentity(pin, identity.current);
-          saveProfile({ nickname: next.nickname, avatar: next.avatar });
+          if (remember.current) saveProfile({ nickname: next.nickname, avatar: next.avatar });
         },
       });
       sock.current = s;
@@ -75,6 +82,13 @@ export default function Play() {
 
   useEffect(() => () => sock.current?.close(), []);
 
+  // The seat token is only kept while it is useful.
+  const finished =
+    removed || ended || erased || error?.code === 'removed' || error?.code === 'ended' || error?.code === 'not_found';
+  useEffect(() => {
+    if (finished || gate === 'missing') clearIdentity(pin);
+  }, [finished, gate, pin]);
+
   // A rejected join (bad nickname) returns to the form; anything terminal stays.
   useEffect(() => {
     if (error?.code === 'bad_nickname' || (error?.code === 'locked' && !me))
@@ -88,6 +102,14 @@ export default function Play() {
     );
   if (gate === 'locked')
     return <Terminal emoji="🔒" title="Lobby is locked" body="The host isn't accepting new players for this game." />;
+  if (erased)
+    return (
+      <Terminal
+        emoji="🧹"
+        title="Your data was erased"
+        body="You left the game and your nickname, answers and flags were deleted. Nothing about you will appear in the results."
+      />
+    );
   if (removed) return <Terminal emoji="🚪" title="You were removed" body="The host removed you from this game." />;
   if (error?.code === 'removed')
     return <Terminal emoji="🚪" title="You were removed" body="The host removed you from this game." />;
@@ -132,22 +154,37 @@ function Terminal({ emoji, title, body }: { emoji: string; title: string; body: 
         <Link to="/" className="btn btn-dark" style={{ marginTop: 16 }}>
           Back to home
         </Link>
+        <Footer dark />
       </div>
     </div>
   );
 }
 
-function JoinForm({ pin, onJoin, error }: { pin: string; onJoin: (id: PlayerIdentity) => void; error: string | null }) {
+function JoinForm({
+  pin,
+  onJoin,
+  error,
+}: {
+  pin: string;
+  onJoin: (id: PlayerIdentity, remember: boolean) => void;
+  error: string | null;
+}) {
   const profile = loadProfile();
   const [nickname, setNickname] = useState(profile?.nickname ?? '');
   const [parts, setParts] = useState<AvatarParts>(() => parseAvatar(profile?.avatar ?? '') ?? randomAvatar());
+  // Both boxes start unticked: permission is an active choice, and remembering is opt-in.
+  const [allowed, setAllowed] = useState(false);
+  const [remember, setRemember] = useState(false);
+  const ready = nickname.trim().length >= 2 && allowed;
   return (
     <div className="dark-surface" style={{ minHeight: '100dvh', padding: '20px 16px 32px' }}>
+      <SkipLink />
       <form
+        id="main"
         style={{ maxWidth: 440, margin: '0 auto' }}
         onSubmit={(e) => {
           e.preventDefault();
-          if (nickname.trim().length >= 2) onJoin({ nickname: nickname.trim(), avatar: encodeAvatar(parts) });
+          if (ready) onJoin({ nickname: nickname.trim(), avatar: encodeAvatar(parts) }, remember);
         }}
       >
         <div className="muted-on-dark" style={{ fontWeight: 700 }}>
@@ -179,18 +216,43 @@ function JoinForm({ pin, onJoin, error }: { pin: string; onJoin: (id: PlayerIden
         <div style={{ margin: '20px 0' }}>
           <AvatarBuilder value={parts} onChange={setParts} onRandomize={() => setParts(randomAvatar())} />
         </div>
-        <button
-          className="btn btn-primary btn-lg"
-          style={{ width: '100%' }}
-          type="submit"
-          disabled={nickname.trim().length < 2}
-        >
+        <div style={{ display: 'grid', gap: 12, margin: '4px 0 16px' }}>
+          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <input
+              type="checkbox"
+              checked={allowed}
+              onChange={(e) => setAllowed(e.target.checked)}
+              style={{ width: 24, height: 24, flex: 'none', marginTop: 1 }}
+            />
+            <span>
+              I'm old enough to join on my own, or my teacher or parent has said it's OK.{' '}
+              <span className="muted-on-dark">(Required)</span>
+            </span>
+          </label>
+          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              style={{ width: 24, height: 24, flex: 'none', marginTop: 1 }}
+            />
+            <span>
+              Remember my nickname and avatar on this device <span className="muted-on-dark">(Optional)</span>
+            </span>
+          </label>
+        </div>
+        <button className="btn btn-primary btn-lg" style={{ width: '100%' }} type="submit" disabled={!ready}>
           Join game
         </button>
         <p className="muted-on-dark" style={{ fontSize: 14, marginTop: 14 }}>
-          👀 Switching tabs or apps during a question is recorded, shown to the whole room, and may cost points.
+          👀 Switching tabs or apps during a question is recorded, shown to the whole room, and may cost points. We keep
+          your nickname, avatar and answers only for this game. Please don't use your real name.{' '}
+          <Link to="/privacy" className="page-link" style={{ color: '#c9d1ff' }}>
+            Privacy policy
+          </Link>
         </p>
       </form>
+      <Footer dark />
     </div>
   );
 }
@@ -206,6 +268,7 @@ function Game({ pin, socket }: { pin: string; socket: React.RefObject<GameSocket
   const dismissWarned = useGame((s) => s.dismissWarned);
   const dropNotice = useGame((s) => s.dropNotice);
   usePresence(socket, phase?.t === 'question' && !phase.paused);
+  const [confirmLeave, setConfirmLeave] = useState(false);
 
   useEffect(() => {
     void acquireWakeLock();
@@ -297,6 +360,31 @@ function Game({ pin, socket }: { pin: string; socket: React.RefObject<GameSocket
           </Centered>
         )}
       </div>
+      <div style={{ textAlign: 'center', padding: '0 16px max(12px, env(safe-area-inset-bottom))' }}>
+        <button
+          className="btn btn-ghost muted-on-dark"
+          style={{ minHeight: 40, fontSize: 14, textDecoration: 'underline' }}
+          onClick={() => setConfirmLeave(true)}
+        >
+          Leave and erase my data
+        </button>
+      </div>
+      {confirmLeave && (
+        <ConfirmDialog
+          dark
+          danger
+          title="Leave and erase your data?"
+          confirmLabel="Leave and erase"
+          onCancel={() => setConfirmLeave(false)}
+          onConfirm={() => {
+            setConfirmLeave(false);
+            socket.current?.send({ t: 'leave' });
+          }}
+        >
+          You will leave this game now. Your nickname, answers and flags are deleted and won't appear in the results.
+          You can't undo this.
+        </ConfirmDialog>
+      )}
       {warned && <WarnedModal flag={warned.flag} strikesLeft={warned.strikesLeft} onClose={dismissWarned} />}
     </div>
   );
@@ -580,8 +668,10 @@ function WarnedModal({ flag, strikesLeft, onClose }: { flag: FlagInfo; strikesLe
       : flag.severity === 'moderate'
         ? "Your answer for that question doesn't count."
         : `Your answer is void and 500 points were deducted${flag.quickAnswer ? ' (you answered right after returning)' : ''}.`;
+  const ref = useDialog<HTMLDivElement>(true, onClose);
   return (
     <div
+      ref={ref}
       role="alertdialog"
       aria-modal="true"
       aria-label="Warning"

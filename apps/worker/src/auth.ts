@@ -6,8 +6,6 @@ import type { Env } from './env';
 export interface User {
   id: string;
   name: string;
-  email: string | null;
-  picture: string | null;
 }
 
 const COOKIE = 'qa_session';
@@ -21,7 +19,7 @@ export async function currentUser(c: C): Promise<User | null> {
   if (!token) return null;
   const id = await sha256Hex(token);
   return c.env.DB.prepare(
-    `SELECT u.id, u.name, u.email, u.picture FROM sessions s JOIN users u ON u.id = s.user_id
+    `SELECT u.id, u.name FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.id = ? AND s.expires_at > ?`,
   )
     .bind(id, Date.now())
@@ -54,7 +52,7 @@ export async function endSession(c: C): Promise<void> {
 export async function upsertUser(
   db: D1Database,
   key: { googleId?: string; id?: string },
-  profile: { name: string; email?: string | null; picture?: string | null },
+  profile: { name: string },
 ): Promise<string> {
   if (key.googleId) {
     const existing = await db
@@ -62,17 +60,14 @@ export async function upsertUser(
       .bind(key.googleId)
       .first<{ id: string }>();
     if (existing) {
-      await db
-        .prepare('UPDATE users SET name = ?, email = ?, picture = ? WHERE id = ?')
-        .bind(profile.name, profile.email ?? null, profile.picture ?? null, existing.id)
-        .run();
+      await db.prepare('UPDATE users SET name = ? WHERE id = ?').bind(profile.name, existing.id).run();
       return existing.id;
     }
   }
   const id = key.id ?? crypto.randomUUID();
   await db
-    .prepare('INSERT OR IGNORE INTO users (id, google_id, name, email, picture, created_at) VALUES (?,?,?,?,?,?)')
-    .bind(id, key.googleId ?? null, profile.name, profile.email ?? null, profile.picture ?? null, Date.now())
+    .prepare('INSERT OR IGNORE INTO users (id, google_id, name, created_at) VALUES (?,?,?,?)')
+    .bind(id, key.googleId ?? null, profile.name, Date.now())
     .run();
   return id;
 }
@@ -95,7 +90,7 @@ export function googleStartUrl(c: C): string | null {
     client_id: clientId,
     redirect_uri: `${origin}/api/auth/google/callback`,
     response_type: 'code',
-    scope: 'openid email profile',
+    scope: 'openid profile',
     state,
     prompt: 'select_account',
   });
@@ -126,16 +121,7 @@ export async function googleCallback(c: C): Promise<string | null> {
   const payload = JSON.parse(atob(id_token.split('.')[1]!.replace(/-/g, '+').replace(/_/g, '/'))) as {
     sub: string;
     name?: string;
-    email?: string;
-    picture?: string;
   };
-  return upsertUser(
-    c.env.DB,
-    { googleId: payload.sub },
-    {
-      name: payload.name ?? payload.email ?? 'Host',
-      email: payload.email,
-      picture: payload.picture,
-    },
-  );
+  // Only the subject id and display name are kept: no email address, no profile picture.
+  return upsertUser(c.env.DB, { googleId: payload.sub }, { name: (payload.name ?? 'Host').slice(0, 60) });
 }

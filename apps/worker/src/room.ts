@@ -286,6 +286,7 @@ export class GameRoom extends DurableObject<Env> {
           if (msg.t === 'answer') await this.handleAnswer(s, p, msg, now);
           else if (msg.t === 'presence') await this.handlePresence(s, p, msg, now);
           else if (msg.t === 'ping') this.handlePing(s, p, ws, now);
+          else if (msg.t === 'leave') await this.eraseSelf(s, p, ws);
         }
       }
     } else if (msg.t === 'ping') {
@@ -639,6 +640,39 @@ export class GameRoom extends DurableObject<Env> {
       if (!f || f.cleared) continue;
       const strikesLeft = Math.max(0, s.settings.kickStrikes - this.strikesOf(s, p.id));
       this.sendToPlayer(p.id, { t: 'warned', flag: this.flagInfo(s, f), strikesLeft } as ServerMsg);
+    }
+  }
+
+  /**
+   * Right to erasure: a player removes themselves and everything stored about them in this game
+   * (identity, answers, flags). Their nickname will not appear in the saved results.
+   */
+  private async eraseSelf(s: GameState, p: PlayerRec, ws: WebSocket): Promise<void> {
+    delete s.players[p.id];
+    for (const q of Object.keys(s.answers)) delete s.answers[Number(q)]?.[p.id];
+    const gone = new Set(s.flags.filter((f) => f.playerId === p.id).map((f) => f.id));
+    s.flags = s.flags.filter((f) => f.playerId !== p.id);
+    delete s.prevRanks[p.id];
+    delete s.shownRanks[p.id];
+    this.pingAt.delete(p.id);
+    this.maxGap.delete(p.id);
+    this.send(ws, { t: 'left' } as ServerMsg);
+    for (const w of this.sockets()) {
+      if ((w.deserializeAttachment() as Attachment | null)?.playerId === p.id) {
+        try {
+          w.close(1000, 'erased');
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    for (const id of gone) this.broadcastAll({ t: 'flagCleared', flagId: id, playerId: p.id } as ServerMsg);
+    log('player_erased', { pin: s.pin });
+    await this.save();
+    this.broadcastRoster();
+    if (s.phase === 'question') {
+      this.broadcastProgress();
+      await this.maybeCloseEarly(s);
     }
   }
 
@@ -1108,6 +1142,7 @@ export class GameRoom extends DurableObject<Env> {
           ...common,
           text: q!.text,
           image: q!.image,
+          imageAlt: q!.imageAlt,
           options: q!.type === 'tf' ? ['True', 'False'] : q!.options,
         };
       }
@@ -1208,6 +1243,7 @@ export class GameRoom extends DurableObject<Env> {
       text: isPlayer ? undefined : q.text,
       options: isPlayer ? undefined : q.type === 'tf' ? ['True', 'False'] : q.options,
       image: isPlayer ? undefined : q.image,
+      imageAlt: isPlayer ? undefined : q.imageAlt,
       you,
       isLast: i + 1 >= s.questionCount,
     };

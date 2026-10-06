@@ -1,5 +1,5 @@
 export interface Me {
-  user: { id: string; name: string; email: string | null; picture: string | null } | null;
+  user: { id: string; name: string } | null;
   devLogin: boolean;
   google: boolean;
 }
@@ -30,7 +30,13 @@ export const api = {
   saveQuiz: (id: string, body: unknown) =>
     req<{ ok: true; updatedAt: number }>(`/api/quizzes/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteQuiz: (id: string) => req(`/api/quizzes/${id}`, { method: 'DELETE' }),
-  hostQuiz: (id: string) => req<{ pin: string }>(`/api/quizzes/${id}/host`, { method: 'POST' }),
+  hostQuiz: (id: string) =>
+    req<{ pin: string }>(`/api/quizzes/${id}/host`, {
+      method: 'POST',
+      body: JSON.stringify({ audienceConsent: true }),
+    }),
+  deleteAccount: () => req('/api/me', { method: 'DELETE' }),
+  deleteResult: (id: string) => req(`/api/results/${id}`, { method: 'DELETE' }),
   ticket: (pin: string, role: 'host' | 'screen') =>
     req<{ ticket: string }>(`/api/games/${pin}/ticket?role=${role}`, { method: 'POST' }),
   results: () =>

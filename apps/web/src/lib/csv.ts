@@ -89,6 +89,7 @@ export function csvToQuestions(text: string, newId: () => string = () => crypto.
         type,
         text: get(r, 'question').slice(0, 200),
         image: null,
+        imageAlt: '',
         options,
         correctIndex:
           type === 'text'

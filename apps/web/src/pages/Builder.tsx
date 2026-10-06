@@ -12,7 +12,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { QuestionLayout } from '../components/BigScreen';
 import { api } from '../lib/api';
+import { SkipLink } from '../components/Chrome';
+import { HostConsentDialog } from '../components/Dialogs';
 import { csvToQuestions, download, questionsToCsv } from '../lib/csv';
+import { useDialog } from '../lib/useDialog';
 
 type SaveState = 'saved' | 'saving' | 'error' | 'dirty';
 const TYPE_LABEL: Record<QuestionType, string> = {
@@ -50,6 +53,7 @@ export default function Builder() {
   const [save, setSave] = useState<SaveState>('saved');
   const [loaded, setLoaded] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showConsent, setShowConsent] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [hosting, setHosting] = useState(false);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
@@ -155,14 +159,20 @@ export default function Builder() {
       );
       return;
     }
+    setShowConsent(true);
+  };
+
+  const startHosting = async () => {
+    setShowConsent(false);
     setHosting(true);
     try {
       dirty.current = true;
       await flush();
       const { pin } = await api.hostQuiz(id);
       nav(`/host/live/${pin}`);
-    } catch {
-      setProblem('Could not start the game. Please try again.');
+    } catch (e) {
+      const issue = (e as { body?: { issues?: { message: string }[] } }).body?.issues?.[0]?.message;
+      setProblem(issue ? `Could not start the game: ${issue}.` : 'Could not start the game. Please try again.');
       setHosting(false);
     }
   };
@@ -189,6 +199,7 @@ export default function Builder() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
+      <SkipLink />
       <header
         style={{
           display: 'flex',
@@ -378,6 +389,8 @@ export default function Builder() {
 
         {q && (
           <section
+            id="main"
+            tabIndex={-1}
             aria-label={`Editing question ${sel + 1}`}
             style={{ flex: 1, minWidth: 320, padding: 16, display: 'grid', gap: 16, alignContent: 'start' }}
           >
@@ -396,6 +409,9 @@ export default function Builder() {
         )}
       </div>
 
+      {showConsent && (
+        <HostConsentDialog onCancel={() => setShowConsent(false)} onConfirm={() => void startHosting()} />
+      )}
       {showSettings && (
         <SettingsDialog
           value={settings}
@@ -444,6 +460,7 @@ function Preview({ q, index, total }: { q: Question; index: number; total: numbe
           qtype={q.type}
           text={q.text}
           image={q.image}
+          imageAlt={q.imageAlt}
           options={q.type === 'tf' ? ['True', 'False'] : q.options.map((o, i) => o || `Option ${i + 1}`)}
           remainingMs={q.timeLimitS * 1000}
           limitMs={q.timeLimitS * 1000}
@@ -489,6 +506,7 @@ function Editor({
   globalTypo: boolean;
 }) {
   const bad = (k: string) => errors.includes(k);
+  const fileInput = useRef<HTMLInputElement>(null);
   const changeType = (type: QuestionType) => {
     const base = newQuestion(type);
     onChange({
@@ -529,33 +547,61 @@ function Editor({
         />
       </Field>
 
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-        {q.image ? (
-          <>
-            <img src={q.image} alt="Question illustration" style={{ height: 64, borderRadius: 8 }} />
-            <button className="btn" onClick={() => onChange({ image: null })}>
-              Remove image
-            </button>
-          </>
-        ) : (
-          <label className="btn" style={{ cursor: 'pointer' }}>
-            🖼 Add image
+      <div style={{ display: 'grid', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          {q.image ? (
+            <>
+              <img
+                src={q.image}
+                alt={q.imageAlt || 'Question illustration (no description yet)'}
+                style={{ height: 64, borderRadius: 8 }}
+              />
+              <button className="btn" onClick={() => onChange({ image: null, imageAlt: '' })}>
+                Remove image
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="btn" onClick={() => fileInput.current?.click()}>
+                🖼 Add image
+              </button>
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/*"
+                tabIndex={-1}
+                aria-hidden="true"
+                hidden
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!f) return;
+                  try {
+                    onError(null);
+                    onChange({ image: await compressImage(f) });
+                  } catch (err) {
+                    onError(String((err as Error).message));
+                  }
+                }}
+              />
+              <span style={{ fontSize: 13, color: 'var(--ink-muted)' }}>
+                Only upload images you have the right to use.
+              </span>
+            </>
+          )}
+        </div>
+        {q.image && (
+          <Field label="Describe the image for screen readers (required)" error={bad('imageAlt')} id="alt">
             <input
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                try {
-                  onError(null);
-                  onChange({ image: await compressImage(f) });
-                } catch (err) {
-                  onError(String((err as Error).message));
-                }
-              }}
+              id="alt"
+              className="input"
+              value={q.imageAlt}
+              maxLength={150}
+              placeholder="e.g. A map of India with Maharashtra highlighted"
+              aria-invalid={bad('imageAlt')}
+              onChange={(e) => onChange({ imageAlt: e.target.value })}
             />
-          </label>
+          </Field>
         )}
       </div>
 
@@ -734,6 +780,7 @@ function SettingsDialog({
   onChange: (s: GameSettings) => void;
   onClose: () => void;
 }) {
+  const dialogRef = useDialog<HTMLDivElement>(true, onClose);
   const t = value.thresholds;
   const set = (patch: Partial<GameSettings>) => onChange({ ...value, ...patch });
   const setT = (patch: Partial<GameSettings['thresholds']>) => onChange({ ...value, thresholds: { ...t, ...patch } });
@@ -767,6 +814,7 @@ function SettingsDialog({
   );
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label="Game settings"

@@ -49,6 +49,8 @@ export const QuestionSchema = z
     type: QuestionTypeSchema,
     text: z.string().trim().min(1).max(MAX_QUESTION_TEXT),
     image: z.string().max(400_000).nullable().default(null),
+    /** Required whenever an image is attached, so screen-reader users get the same information. */
+    imageAlt: z.string().trim().max(150).default(''),
     options: z.array(z.string().trim().min(1).max(100)).max(4).default([]),
     /** mcq: index of correct option. tf: 0 = True, 1 = False. text: null. */
     correctIndex: z.number().int().min(0).max(3).nullable().default(null),
@@ -58,6 +60,9 @@ export const QuestionSchema = z
     points,
   })
   .superRefine((q, ctx) => {
+    if (q.image && !q.imageAlt) {
+      ctx.addIssue({ code: 'custom', message: 'describe the image for screen readers (alt text)', path: ['imageAlt'] });
+    }
     if (q.type === 'mcq') {
       if (q.options.length < 2) ctx.addIssue({ code: 'custom', message: 'mcq needs 2–4 options', path: ['options'] });
       if (q.correctIndex === null || q.correctIndex >= q.options.length)
@@ -92,6 +97,7 @@ export function newQuestion(type: QuestionType = 'mcq'): Question {
     type,
     text: '',
     image: null,
+    imageAlt: '',
     options: type === 'mcq' ? ['', '', '', ''] : [],
     correctIndex: type === 'text' ? null : 0,
     acceptedAnswers: type === 'text' ? [''] : [],

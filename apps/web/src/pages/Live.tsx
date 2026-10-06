@@ -2,6 +2,7 @@ import type { ClientMsg } from '@quiz/shared/protocol';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { BigScreen, Stage } from '../components/BigScreen';
+import { ConfirmDialog } from '../components/Dialogs';
 import { ModerationDrawer, PendingRemovals } from '../components/Moderation';
 import { api } from '../lib/api';
 import { resultsToCsv, download } from '../lib/csv';
@@ -23,6 +24,7 @@ export default function Live() {
   const [moderation, setModeration] = useState(false);
   const [muted, setMutedState] = useState(isMuted());
   const [table, setTable] = useState(false);
+  const [confirmEnd, setConfirmEnd] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const send = useCallback((m: ClientMsg) => sock.current?.send(m), []);
@@ -76,9 +78,17 @@ export default function Live() {
     setMutedState(isMuted());
   };
 
+  // One listener for the page's lifetime that always calls the latest handlers, so no key press can fall
+  // into the gap between a phase change and the effect that would have re-attached the listener.
+  const keyHandlers = useRef({ primary, phase, send });
+  keyHandlers.current = { primary, phase, send };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const { primary, phase, send } = keyHandlers.current;
+      const el = e.target as HTMLElement;
+      // Never hijack keys meant for a focused control, a form field or an open dialog/drawer.
+      if (el.closest('input, textarea, select, button, a, [role=dialog], [role=alertdialog], aside')) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.code === 'Space') {
         e.preventDefault();
         primary();
@@ -90,13 +100,15 @@ export default function Live() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [primary, phase, send]);
+  }, []);
 
   // Auto-hiding control bar
   const wake = () => {
     setBarVisible(true);
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setBarVisible(false), 3500);
+    hideTimer.current = setTimeout(() => {
+      if (!document.activeElement?.closest('.controls-bar')) setBarVisible(false);
+    }, 3500);
   };
   useEffect(() => {
     wake();
@@ -125,10 +137,31 @@ export default function Live() {
   })();
 
   return (
-    <div onMouseMove={wake} onTouchStart={wake} style={{ position: 'fixed', inset: 0 }}>
+    <div
+      onMouseMove={wake}
+      onTouchStart={wake}
+      // After a mouse click, hand keyboard shortcuts (Space, P, F, M, K) back to the page; keyboard users keep their focus.
+      onClickCapture={(e) => e.detail > 0 && (e.target as HTMLElement).closest('button')?.blur()}
+      style={{ position: 'fixed', inset: 0 }}
+    >
       <Stage>
         <BigScreen isHost send={send as never} showTable={table} />
       </Stage>
+      {confirmEnd && (
+        <ConfirmDialog
+          dark
+          danger
+          title="End the game now?"
+          confirmLabel="End and show podium"
+          onCancel={() => setConfirmEnd(false)}
+          onConfirm={() => {
+            setConfirmEnd(false);
+            send({ t: 'end' });
+          }}
+        >
+          The current question is closed and the podium is shown.
+        </ConfirmDialog>
+      )}
       <PendingRemovals send={send} />
       {moderation && <ModerationDrawer send={send} onClose={() => setModeration(false)} />}
       {status !== 'open' && status !== 'idle' && (
@@ -147,7 +180,12 @@ export default function Live() {
           {status === 'reconnecting' ? 'Reconnecting…' : 'Connecting…'}
         </div>
       )}
-      <div className={`controls-bar ${barVisible ? '' : 'hidden-bar'}`} role="toolbar" aria-label="Host controls">
+      <div
+        className={`controls-bar ${barVisible ? '' : 'hidden-bar'}`}
+        role="toolbar"
+        aria-label="Host controls"
+        onFocus={wake}
+      >
         {phase?.t === 'lobby' && (
           <button className="btn btn-dark" onClick={() => send({ t: 'lockLobby', locked: !locked })}>
             {locked ? '🔓 Unlock' : '🔒 Lock lobby'}
@@ -208,12 +246,7 @@ export default function Live() {
           🖥 Second window
         </button>
         {phase?.t !== 'podium' && (
-          <button
-            className="btn btn-dark"
-            onClick={() => {
-              if (confirm('End the game now and show the podium?')) send({ t: 'end' });
-            }}
-          >
+          <button className="btn btn-dark" onClick={() => setConfirmEnd(true)}>
             End
           </button>
         )}

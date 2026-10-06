@@ -27,6 +27,13 @@ export default defineConfig({
     url: `http://localhost:${PORT}/api/health`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
+    // Public business details are baked into the build, as in a real deploy.
+    env: {
+      VITE_OPERATOR_NAME: 'Example Operator Ltd',
+      VITE_OPERATOR_ADDRESS: '1 Example Street, Bengaluru 560001',
+      VITE_OPERATOR_COUNTRY: 'India',
+      VITE_CONTACT_EMAIL: 'privacy@example.test',
+    },
     stdout: 'ignore',
   },
 });

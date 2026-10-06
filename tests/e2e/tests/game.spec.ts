@@ -73,7 +73,7 @@ test('host and five players play a full game', async ({ browser }) => {
 
   // ---- results ----
   await hostNext(host);
-  await expect(host.getByText('Full results')).toBeVisible();
+  await expect(host.getByRole('table')).toBeVisible();
   for (const p of players) await expect(host.getByRole('cell', { name: p.name })).toBeVisible();
 
   await host.mouse.move(400, 400); // wake the auto-hiding control bar
@@ -114,7 +114,8 @@ test('joining: wrong PIN, nickname rules, locked lobby, kick', async ({ browser 
   const rude = await browser.newContext();
   const rp = await rude.newPage();
   await rp.goto(`/j/${pin}`);
-  await rp.getByLabel('Nickname').fill('f.u.c.k');
+  await rp.getByLabel('Nickname', { exact: true }).fill('f.u.c.k');
+  await rp.getByLabel(/old enough to join/).check();
   await rp.getByRole('button', { name: 'Join game' }).click();
   await expect(rp.getByRole('alert')).toContainText('different nickname');
 
@@ -133,8 +134,8 @@ test('joining: wrong PIN, nickname rules, locked lobby, kick', async ({ browser 
   await expect(lp.getByText('Lobby is locked')).toBeVisible();
 
   // Kick: the player sees why.
-  host.once('dialog', (d) => void d.accept());
   await host.getByRole('button', { name: 'Kick' }).last().click();
+  await host.getByRole('alertdialog').getByRole('button', { name: 'Remove player' }).click();
   await expect(b.page.getByText('You were removed')).toBeVisible();
   await expect(a.page.getByText("You're in!")).toBeVisible();
   await expectLobbyCount(host, 1);

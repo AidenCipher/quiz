@@ -26,6 +26,8 @@ const presence = z.object({
   awayMs: z.number().min(0).max(3_600_000).optional(),
 });
 const ping = z.object({ t: z.literal('ping') });
+/** A player erasing their own data from the game (right to erasure). */
+const leave = z.object({ t: z.literal('leave') });
 const cmd = <T extends string>(t: T) => z.object({ t: z.literal(t) });
 
 export const ClientMsgSchema = z.discriminatedUnion('t', [
@@ -33,6 +35,7 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   answer,
   presence,
   ping,
+  leave,
   cmd('start'),
   cmd('next'),
   cmd('pause'),
@@ -150,6 +153,7 @@ export type ServerMsg =
       // big screen / host only:
       text?: string;
       image?: string | null;
+      imageAlt?: string;
       options?: string[];
       // players only:
       optionCount?: number;
@@ -172,6 +176,7 @@ export type ServerMsg =
       text?: string;
       options?: string[];
       image?: string | null;
+      imageAlt?: string;
       you?: YouReveal;
       isLast: boolean;
     })
@@ -195,6 +200,7 @@ export type ServerMsg =
   | (Base & { t: 'removalCancelled'; playerId: string })
   | (Base & { t: 'removed'; playerId: string; nickname: string; reason: 'strikes' | 'host' })
   | (Base & { t: 'ended' })
+  | (Base & { t: 'left' })
   | (Base & { t: 'pong' })
   | (Base & { t: 'error'; code: ErrorCode; message: string });
 

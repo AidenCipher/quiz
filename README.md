@@ -2,7 +2,7 @@
 
 A minimalist, login-free live quiz. Players scan a QR code, pick a nickname and avatar, and answer timed
 questions on their phones while the host runs the game from a laptop on a projector. Tab switching is
-flagged live on the big screen by an animated detective owl. Everything runs on free tiers.
+flagged live on the big screen by an animated detective owl. It is designed to fit within Cloudflare's free plan limits (check the current limits before a large event).
 
 The full design is in [`docs/implementation-plan.md`](docs/implementation-plan.md).
 
@@ -55,8 +55,11 @@ Visibility API (`setHidden` in `tests/e2e/tests/helpers.ts`); real tab/app switc
 2. Set secrets: `wrangler secret put SESSION_SECRET` (a long random string), and for Google sign-in
    `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`. The OAuth redirect URI is
    `https://<your-worker>.workers.dev/api/auth/google/callback`.
-3. Add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as GitHub Actions secrets.
-4. Merge to `main` to deploy production (CI also runs D1 migrations); push to `staging` for staging.
+3. Set the public business details (shown on the privacy policy, contact page and footer). The deploy refuses to run without them:
+   GitHub repository **variables** `OPERATOR_NAME`, `OPERATOR_ADDRESS`, `OPERATOR_COUNTRY`, `CONTACT_EMAIL`.
+   Locally, set `VITE_OPERATOR_NAME`, `VITE_OPERATOR_ADDRESS`, `VITE_OPERATOR_COUNTRY`, `VITE_CONTACT_EMAIL` before `pnpm build`.
+4. Add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as GitHub Actions secrets.
+5. Merge to `main` to deploy production (CI also runs D1 migrations); push to `staging` for staging.
    Roll back with `wrangler rollback`.
 
 `DEV_LOGIN` must stay `0` in production.
@@ -64,3 +67,12 @@ Visibility API (`setHidden` in `tests/e2e/tests/helpers.ts`); real tab/app switc
 ## Branching
 
 `main` is deployable. Work happens on short-lived branches and pull requests; commits follow Conventional Commits.
+
+## Privacy, accessibility and compliance
+
+The app ships a privacy policy, cookie policy, trust & safety page, pricing & refunds page, credits & licences, a contact page
+with the operator's details, and a data-deletion page. [`docs/compliance.md`](docs/compliance.md) maps each requirement to the
+code and tests, lists what does not apply (payments, email, reviews) and what the operator still has to do. These pages are
+drafted from what the code does; they are not legal advice, so have them reviewed before a public launch.
+
+Regenerate the third-party licence notices after changing dependencies: `node scripts/generate-licenses.mjs`.

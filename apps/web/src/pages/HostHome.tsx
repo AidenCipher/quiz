@@ -1,7 +1,9 @@
+import { defaultSettings, newQuestion } from '@quiz/shared/quiz';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { Footer, SkipLink } from '../components/Chrome';
+import { ConfirmDialog, HostConsentDialog } from '../components/Dialogs';
 import { api, type Me } from '../lib/api';
-import { newQuestion, defaultSettings } from '@quiz/shared/quiz';
 
 type QuizItem = Awaited<ReturnType<typeof api.quizzes>>[number];
 
@@ -11,65 +13,84 @@ export default function HostHome() {
   useEffect(reload, [reload]);
   if (!me) return <div className="p-8">Loading…</div>;
   if (!me.user) return <SignIn me={me} onDone={reload} />;
-  return <Dashboard name={me.user.name} onSignOut={() => void api.logout().then(reload)} />;
+  return <Dashboard name={me.user.name} onSignOut={() => void api.logout().then(reload)} onGone={reload} />;
 }
 
 function SignIn({ me, onDone }: { me: Me; onDone: () => void }) {
   const [name, setName] = useState('');
   return (
-    <main style={{ display: 'grid', placeItems: 'center', minHeight: '100dvh', padding: 20 }}>
-      <div className="card" style={{ padding: 28, maxWidth: 420, width: '100%' }}>
-        <h1 style={{ marginTop: 0 }}>Host a quiz</h1>
-        <p style={{ color: 'var(--ink-muted)' }}>
-          Hosts sign in so quizzes are saved to their account. Players never need to.
-        </p>
-        {me.google ? (
-          <a className="btn btn-primary btn-lg" style={{ width: '100%' }} href="/api/auth/google">
-            Sign in with Google
-          </a>
-        ) : (
-          <p style={{ background: '#fff7e0', borderRadius: 10, padding: 10 }}>
-            Google sign-in isn't configured on this server yet (set <code>GOOGLE_CLIENT_ID</code> and{' '}
-            <code>GOOGLE_CLIENT_SECRET</code>).
+    <>
+      <SkipLink />
+      <main id="main" tabIndex={-1} style={{ display: 'grid', placeItems: 'center', minHeight: '80dvh', padding: 20 }}>
+        <div className="card" style={{ padding: 28, maxWidth: 420, width: '100%' }}>
+          <h1 style={{ marginTop: 0 }}>Host a quiz</h1>
+          <p style={{ color: 'var(--ink-muted)' }}>
+            Hosts sign in so quizzes are saved to their account. Players never need to.
           </p>
-        )}
-        {me.devLogin && (
-          <form
-            style={{ marginTop: 20, borderTop: '1px solid var(--line)', paddingTop: 16 }}
-            onSubmit={(e) => {
-              e.preventDefault();
-              void api.devLogin(name || 'Dev Host').then(onDone);
-            }}
-          >
-            <div className="label">Development login (local only)</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                className="input"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
-                aria-label="Name"
-              />
-              <button className="btn" type="submit">
-                Sign in
-              </button>
-            </div>
-          </form>
-        )}
-        <Link to="/" style={{ display: 'block', marginTop: 20, color: 'var(--ink-muted)' }}>
-          ← Back
-        </Link>
-      </div>
-    </main>
+          {me.google ? (
+            <>
+              <a className="btn btn-primary btn-lg" style={{ width: '100%' }} href="/api/auth/google">
+                Sign in with Google
+              </a>
+              <p style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
+                We keep only your Google account ID and display name: not your email or picture. See the{' '}
+                <Link to="/privacy" className="page-link">
+                  privacy policy
+                </Link>
+                .
+              </p>
+            </>
+          ) : (
+            <p style={{ background: '#fff7e0', borderRadius: 10, padding: 10 }}>
+              Google sign-in isn't configured on this server yet (set <code>GOOGLE_CLIENT_ID</code> and{' '}
+              <code>GOOGLE_CLIENT_SECRET</code>).
+            </p>
+          )}
+          {me.devLogin && (
+            <form
+              style={{ marginTop: 20, borderTop: '1px solid var(--line)', paddingTop: 16 }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                void api.devLogin(name || 'Dev Host').then(onDone);
+              }}
+            >
+              <label className="label" htmlFor="dev-name">
+                Development login (local only)
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  id="dev-name"
+                  className="input"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Your name"
+                />
+                <button className="btn" type="submit">
+                  Sign in
+                </button>
+              </div>
+            </form>
+          )}
+          <Link to="/" style={{ display: 'block', marginTop: 20, color: 'var(--ink-muted)' }}>
+            ← Back
+          </Link>
+        </div>
+      </main>
+      <Footer />
+    </>
   );
 }
 
-function Dashboard({ name, onSignOut }: { name: string; onSignOut: () => void }) {
+function Dashboard({ name, onSignOut, onGone }: { name: string; onSignOut: () => void; onGone: () => void }) {
   const nav = useNavigate();
   const [quizzes, setQuizzes] = useState<QuizItem[] | null>(null);
   const [results, setResults] = useState<Awaited<ReturnType<typeof api.results>>>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [consentFor, setConsentFor] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<
+    null | { kind: 'quiz'; item: QuizItem } | { kind: 'result'; id: string } | { kind: 'account' }
+  >(null);
 
   const load = useCallback(() => {
     void api.quizzes().then(setQuizzes);
@@ -84,6 +105,7 @@ function Dashboard({ name, onSignOut }: { name: string; onSignOut: () => void })
   };
 
   const hostLive = async (id: string) => {
+    setConsentFor(null);
     setBusy(id);
     setProblem(null);
     try {
@@ -102,92 +124,160 @@ function Dashboard({ name, onSignOut }: { name: string; onSignOut: () => void })
   };
 
   return (
-    <main style={{ maxWidth: 880, margin: '0 auto', padding: '24px 16px' }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <h1 style={{ margin: 0, flex: 1 }}>My quizzes</h1>
-        <span style={{ color: 'var(--ink-muted)' }}>{name}</span>
-        <button className="btn" onClick={onSignOut}>
-          Sign out
-        </button>
-        <button className="btn btn-primary" onClick={() => void create()}>
-          + New quiz
-        </button>
-      </header>
-      {problem && (
-        <div
-          role="alert"
-          style={{
-            background: '#fdecec',
-            border: '1px solid #f5b5b5',
-            borderRadius: 12,
-            padding: 12,
-            marginBottom: 16,
+    <>
+      <SkipLink />
+      <main id="main" tabIndex={-1} style={{ maxWidth: 880, margin: '0 auto', padding: '24px 16px' }}>
+        <header style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+          <h1 style={{ margin: 0, flex: 1 }}>My quizzes</h1>
+          <span style={{ color: 'var(--ink-muted)' }}>{name}</span>
+          <button className="btn" onClick={onSignOut}>
+            Sign out
+          </button>
+          <button className="btn btn-primary" onClick={() => void create()}>
+            + New quiz
+          </button>
+        </header>
+        {problem && (
+          <div
+            role="alert"
+            style={{
+              background: '#fdecec',
+              border: '1px solid #f5b5b5',
+              borderRadius: 12,
+              padding: 12,
+              marginBottom: 16,
+            }}
+          >
+            {problem}
+          </div>
+        )}
+        {quizzes === null ? (
+          <p>Loading…</p>
+        ) : quizzes.length === 0 ? (
+          <div className="card" style={{ padding: 32, textAlign: 'center' }}>
+            <p>No quizzes yet. Create your first one.</p>
+          </div>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 12 }}>
+            {quizzes.map((q) => (
+              <li
+                key={q.id}
+                className="card"
+                style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}
+              >
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ fontWeight: 700, fontSize: 18 }}>{q.title}</div>
+                  <div style={{ color: 'var(--ink-muted)', fontSize: 14 }}>
+                    {q.questionCount} question{q.questionCount === 1 ? '' : 's'} · edited{' '}
+                    {new Date(q.updatedAt).toLocaleString()}
+                  </div>
+                </div>
+                <Link className="btn" to={`/host/quiz/${q.id}`}>
+                  Edit
+                </Link>
+                <button className="btn" onClick={() => setConfirm({ kind: 'quiz', item: q })}>
+                  Delete
+                </button>
+                <button className="btn btn-primary" disabled={busy === q.id} onClick={() => setConsentFor(q.id)}>
+                  {busy === q.id ? 'Starting…' : '▶ Host live'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <h2 style={{ marginTop: 40 }}>Past games</h2>
+        {results.length === 0 ? (
+          <p style={{ color: 'var(--ink-muted)' }}>
+            Finished games appear here for 30 days, then are deleted automatically.
+          </p>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 8 }}>
+            {results.map((r) => (
+              <li
+                key={r.id}
+                className="card"
+                style={{ padding: '10px 16px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}
+              >
+                <span style={{ flex: 1, minWidth: 200 }}>
+                  <b>{r.title ?? 'Deleted quiz'}</b> · {r.players} player{r.players === 1 ? '' : 's'} ·{' '}
+                  {new Date(r.endedAt).toLocaleString()}
+                </span>
+                <Link className="btn" to={`/host/results/${r.id}`}>
+                  View
+                </Link>
+                <button className="btn" onClick={() => setConfirm({ kind: 'result', id: r.id })}>
+                  Delete results
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <h2 style={{ marginTop: 40 }}>Your data</h2>
+        <div className="card" style={{ padding: 16, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <p style={{ margin: 0, flex: 1, minWidth: 240, color: 'var(--ink-muted)' }}>
+            We keep your Google account ID, display name, quizzes and finished-game results. Download everything, or
+            delete it all.
+          </p>
+          <a className="btn" href="/api/me/export" download>
+            Download my data
+          </a>
+          <button className="btn btn-danger" onClick={() => setConfirm({ kind: 'account' })}>
+            Delete my account
+          </button>
+        </div>
+      </main>
+      <Footer />
+
+      {consentFor && (
+        <HostConsentDialog onCancel={() => setConsentFor(null)} onConfirm={() => void hostLive(consentFor)} />
+      )}
+      {confirm?.kind === 'quiz' && (
+        <ConfirmDialog
+          title={`Delete “${confirm.item.title}”?`}
+          confirmLabel="Delete quiz"
+          danger
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => {
+            const id = confirm.item.id;
+            setConfirm(null);
+            void api.deleteQuiz(id).then(load);
           }}
         >
-          {problem}
-        </div>
+          The quiz and its questions are erased. This can't be undone.
+        </ConfirmDialog>
       )}
-      {quizzes === null ? (
-        <p>Loading…</p>
-      ) : quizzes.length === 0 ? (
-        <div className="card" style={{ padding: 32, textAlign: 'center' }}>
-          <p>No quizzes yet. Create your first one.</p>
-        </div>
-      ) : (
-        <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 12 }}>
-          {quizzes.map((q) => (
-            <li
-              key={q.id}
-              className="card"
-              style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}
-            >
-              <div style={{ flex: 1, minWidth: 200 }}>
-                <div style={{ fontWeight: 700, fontSize: 18 }}>{q.title}</div>
-                <div style={{ color: 'var(--ink-muted)', fontSize: 14 }}>
-                  {q.questionCount} question{q.questionCount === 1 ? '' : 's'} · edited{' '}
-                  {new Date(q.updatedAt).toLocaleString()}
-                </div>
-              </div>
-              <Link className="btn" to={`/host/quiz/${q.id}`}>
-                Edit
-              </Link>
-              <button
-                className="btn"
-                onClick={() => {
-                  if (confirm(`Delete “${q.title}”? This can't be undone.`)) void api.deleteQuiz(q.id).then(load);
-                }}
-              >
-                Delete
-              </button>
-              <button className="btn btn-primary" disabled={busy === q.id} onClick={() => void hostLive(q.id)}>
-                {busy === q.id ? 'Starting…' : '▶ Host live'}
-              </button>
-            </li>
-          ))}
-        </ul>
+      {confirm?.kind === 'result' && (
+        <ConfirmDialog
+          title="Delete these results?"
+          confirmLabel="Delete results"
+          danger
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => {
+            const id = confirm.id;
+            setConfirm(null);
+            void api.deleteResult(id).then(load);
+          }}
+        >
+          The scores, nicknames and flag log of this game are erased for good.
+        </ConfirmDialog>
       )}
-      <h2 style={{ marginTop: 40 }}>Past games</h2>
-      {results.length === 0 ? (
-        <p style={{ color: 'var(--ink-muted)' }}>Finished games appear here for 30 days.</p>
-      ) : (
-        <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 8 }}>
-          {results.map((r) => (
-            <li
-              key={r.id}
-              className="card"
-              style={{ padding: '10px 16px', display: 'flex', gap: 12, alignItems: 'center' }}
-            >
-              <span style={{ flex: 1 }}>
-                <b>{r.title ?? 'Deleted quiz'}</b> · {r.players} player{r.players === 1 ? '' : 's'} ·{' '}
-                {new Date(r.endedAt).toLocaleString()}
-              </span>
-              <Link className="btn" to={`/host/results/${r.id}`}>
-                View
-              </Link>
-            </li>
-          ))}
-        </ul>
+      {confirm?.kind === 'account' && (
+        <ConfirmDialog
+          title="Delete your account?"
+          confirmLabel="Delete everything"
+          danger
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => {
+            setConfirm(null);
+            void api.deleteAccount().then(onGone);
+          }}
+        >
+          Your profile, sign-in sessions, quizzes, images and all saved game results are erased immediately. This can't
+          be undone. Download your data first if you want a copy.
+        </ConfirmDialog>
       )}
-    </main>
+    </>
   );
 }

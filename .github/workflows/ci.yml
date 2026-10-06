@@ -56,7 +56,18 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: node scripts/check-site-config.mjs
+        env:
+          VITE_OPERATOR_NAME: ${{ vars.OPERATOR_NAME }}
+          VITE_OPERATOR_ADDRESS: ${{ vars.OPERATOR_ADDRESS }}
+          VITE_OPERATOR_COUNTRY: ${{ vars.OPERATOR_COUNTRY }}
+          VITE_CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
       - run: pnpm --filter @quiz/web build
+        env:
+          VITE_OPERATOR_NAME: ${{ vars.OPERATOR_NAME }}
+          VITE_OPERATOR_ADDRESS: ${{ vars.OPERATOR_ADDRESS }}
+          VITE_OPERATOR_COUNTRY: ${{ vars.OPERATOR_COUNTRY }}
+          VITE_CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
       - run: pnpm --filter @quiz/worker exec wrangler d1 migrations apply quiz-arena-staging --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -78,7 +89,18 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: node scripts/check-site-config.mjs
+        env:
+          VITE_OPERATOR_NAME: ${{ vars.OPERATOR_NAME }}
+          VITE_OPERATOR_ADDRESS: ${{ vars.OPERATOR_ADDRESS }}
+          VITE_OPERATOR_COUNTRY: ${{ vars.OPERATOR_COUNTRY }}
+          VITE_CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
       - run: pnpm --filter @quiz/web build
+        env:
+          VITE_OPERATOR_NAME: ${{ vars.OPERATOR_NAME }}
+          VITE_OPERATOR_ADDRESS: ${{ vars.OPERATOR_ADDRESS }}
+          VITE_OPERATOR_COUNTRY: ${{ vars.OPERATOR_COUNTRY }}
+          VITE_CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
       - run: pnpm --filter @quiz/worker exec wrangler d1 migrations apply quiz-arena --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

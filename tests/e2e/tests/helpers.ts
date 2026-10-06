@@ -57,7 +57,7 @@ export async function startGame(browser: Browser, questions: Q[] = demoQuiz(), s
     },
   });
   const { id } = (await created.json()) as { id: string };
-  const hosted = await context.request.post(`/api/quizzes/${id}/host`);
+  const hosted = await context.request.post(`/api/quizzes/${id}/host`, { data: { audienceConsent: true } });
   expect(hosted.ok()).toBe(true);
   const { pin } = (await hosted.json()) as { pin: string };
   await page.goto(`/host/live/${pin}`);
@@ -76,7 +76,8 @@ export async function joinPlayer(browser: Browser, pin: string, name: string): P
   const context = await browser.newContext({ ...devices['Pixel 7'] });
   const page = await context.newPage();
   await page.goto(`/j/${pin}`);
-  await page.getByLabel('Nickname').fill(name);
+  await page.getByLabel('Nickname', { exact: true }).fill(name);
+  await page.getByLabel(/old enough to join/).check();
   await page.getByRole('button', { name: 'Join game' }).click();
   await expect(page.getByText("You're in!")).toBeVisible();
   return { name, context, page };

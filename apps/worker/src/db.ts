@@ -14,6 +14,7 @@ interface DbQuestion {
   type: string;
   text: string;
   image: string | null;
+  image_alt: string;
   options: string | null;
   correct_index: number | null;
   accepted_answers: string | null;
@@ -59,10 +60,12 @@ export async function getQuiz(db: D1Database, id: string, ownerId: string): Prom
     createdAt: q.created_at,
     updatedAt: q.updated_at,
     questions: results.map((r) => ({
-      id: r.id,
+      // Rows are keyed `${quizId}:${questionId}` to be unique in the table; clients only know the question id.
+      id: r.id.startsWith(`${id}:`) ? r.id.slice(id.length + 1) : r.id,
       type: r.type,
       text: r.text,
       image: r.image,
+      imageAlt: r.image_alt,
       options: parseJson<string[]>(r.options, []),
       correctIndex: r.correct_index,
       acceptedAnswers: parseJson<string[]>(r.accepted_answers, []),
@@ -101,8 +104,8 @@ export async function saveQuiz(
     stmts.push(
       db
         .prepare(
-          `INSERT INTO questions (id, quiz_id, position, type, text, image, options, correct_index,
-             accepted_answers, typo_tolerance, time_limit_s, points) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO questions (id, quiz_id, position, type, text, image, image_alt, options, correct_index,
+             accepted_answers, typo_tolerance, time_limit_s, points) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         )
         .bind(
           // Question ids are only unique per quiz in the client; namespace them for the table key.
@@ -112,6 +115,7 @@ export async function saveQuiz(
           q.type ?? 'mcq',
           (q.text ?? '').slice(0, 200),
           q.image ?? null,
+          (q.imageAlt ?? '').slice(0, 150),
           JSON.stringify(q.options ?? []),
           q.correctIndex ?? null,
           JSON.stringify(q.acceptedAnswers ?? []),
