@@ -417,6 +417,26 @@ describe('anti-cheat', () => {
   });
 });
 
+describe('scale', () => {
+  it('150 simultaneous answers are accepted and the reveal arrives promptly (regression: O(n²) per answer took ~3 s at 150)', async () => {
+    const { stub, pin } = await makeGame({ questions: [mcq('Q1', 1, 30)] });
+    const host = await openHost(stub, pin);
+    const bots: Client[] = [];
+    for (let i = 0; i < 150; i++) bots.push(await join(stub, `Bot ${i}`));
+    host.send({ t: 'start' });
+    await host.waitFor((m) => m.t === 'getready');
+    host.send({ t: 'skip' });
+    await Promise.all(bots.map((b) => b.waitFor((m) => m.t === 'question')));
+    const t0 = Date.now();
+    for (const b of bots) b.send({ t: 'answer', q: 0, option: 1 });
+    await host.waitFor((m) => m.t === 'reveal', 10_000);
+    const took = Date.now() - t0;
+    await Promise.all(bots.map((b) => b.waitFor((m) => m.t === 'reveal')));
+    expect(bots.every((b) => b.msgs.some((m) => m.t === 'answerAck' && m.ok))).toBe(true);
+    expect(took).toBeLessThan(600);
+  }, 60_000);
+});
+
 describe('right to erasure', () => {
   it('a player can erase themselves: gone from the roster, answers, flags and saved results', async () => {
     const { stub, pin } = await makeGame({ questions: [mcq('Q1', 1)] });

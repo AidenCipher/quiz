@@ -17,6 +17,12 @@ pnpm --filter @quiz/web build && pnpm --filter @quiz/worker dev   # http://local
 Open <http://localhost:8787/host>, use the **development login**, create a quiz and press **Host live**.
 For hot reload of the UI run `pnpm --filter @quiz/web dev` (port 5173, proxies `/api` and `/ws` to the worker).
 
+Load test (150 players, 15 questions) against a server with `DEV_LOGIN=1`, local or staging:
+
+```bash
+node tests/load/load.mjs 150 15 http://localhost:8787   # or: pnpm test:load
+```
+
 Simulate players (optionally with tab-switchers) against a live game:
 
 ```bash

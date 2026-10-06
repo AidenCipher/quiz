@@ -874,8 +874,9 @@ export class GameRoom extends DurableObject<Env> {
     s.answers[s.qIndex] = {};
     this.pingAt.clear();
     this.maxGap.clear();
+    const online = this.connectedIds();
     for (const p of this.activePlayers(s)) {
-      if (this.isConnected(p.id)) this.pingAt.set(p.id, now);
+      if (online.has(p.id)) this.pingAt.set(p.id, now);
     }
     this.broadcastPhase();
     this.broadcastProgress();
@@ -938,7 +939,8 @@ export class GameRoom extends DurableObject<Env> {
 
   private async maybeCloseEarly(s: GameState): Promise<void> {
     if (s.phase !== 'question' || s.pausedAt !== null) return;
-    const connected = this.activePlayers(s).filter((p) => this.isConnected(p.id));
+    const online = this.connectedIds();
+    const connected = this.activePlayers(s).filter((p) => online.has(p.id));
     if (!connected.length) return;
     const answers = s.answers[s.qIndex] ?? {};
     if (connected.every((p) => answers[p.id])) {
@@ -971,7 +973,14 @@ export class GameRoom extends DurableObject<Env> {
     return a.option !== undefined && a.option === q.correctIndex;
   }
 
+  /** Set for the duration of one broadcast so 150 phones don't each trigger a full re-score. */
+  private frame: ReturnType<GameRoom['computeStandings']> | null = null;
+
   private standings(s: GameState) {
+    return this.frame ?? this.computeStandings(s);
+  }
+
+  private computeStandings(s: GameState) {
     const players = Object.values(s.players);
     const scores = scoreGame({
       questions: this.qMetas(s),
@@ -1250,13 +1259,14 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private lobbyPlayers(s: GameState): LobbyPlayer[] {
+    const online = this.connectedIds();
     return Object.values(s.players)
       .filter((p) => !p.removed)
       .map((p) => ({
         id: p.id,
         nickname: p.nickname,
         avatar: p.avatar,
-        connected: this.isConnected(p.id),
+        connected: online.has(p.id),
         flags: this.flagCount(s, p.id),
       }));
   }
@@ -1269,8 +1279,14 @@ export class GameRoom extends DurableObject<Env> {
     return this.ctx.getWebSockets();
   }
 
-  private isConnected(pid: string): boolean {
-    return this.sockets().some((w) => (w.deserializeAttachment() as Attachment | null)?.playerId === pid);
+  /** One pass over the sockets. Calling isConnected() per player is O(players²) and showed up under load. */
+  private connectedIds(): Set<string> {
+    const ids = new Set<string>();
+    for (const w of this.sockets()) {
+      const id = (w.deserializeAttachment() as Attachment | null)?.playerId;
+      if (id) ids.add(id);
+    }
+    return ids;
   }
 
   private activePlayers(s: GameState): PlayerRec[] {
@@ -1310,11 +1326,18 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private broadcastPhase(): void {
-    for (const ws of this.sockets()) {
-      const att = ws.deserializeAttachment() as Attachment | null;
-      if (!att) continue;
-      if (att.role === 'player' && !att.playerId) continue; // not joined yet
-      this.send(ws, this.phaseMsg(att));
+    const s = this.state;
+    if (!s) return;
+    this.frame = this.computeStandings(s);
+    try {
+      for (const ws of this.sockets()) {
+        const att = ws.deserializeAttachment() as Attachment | null;
+        if (!att) continue;
+        if (att.role === 'player' && !att.playerId) continue; // not joined yet
+        this.send(ws, this.phaseMsg(att));
+      }
+    } finally {
+      this.frame = null;
     }
   }
 
@@ -1333,7 +1356,8 @@ export class GameRoom extends DurableObject<Env> {
   private broadcastProgress(): void {
     const s = this.state;
     if (!s || s.phase !== 'question') return;
-    const active = this.activePlayers(s).filter((p) => this.isConnected(p.id));
+    const online = this.connectedIds();
+    const active = this.activePlayers(s).filter((p) => online.has(p.id));
     const answers = s.answers[s.qIndex] ?? {};
     const msg = {
       t: 'progress',
