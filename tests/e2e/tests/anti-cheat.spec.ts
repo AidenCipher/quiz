@@ -148,3 +148,25 @@ test('a network blip during a question and a page refresh keep the same seat and
   await expect(asha.page.getByText('Your rank')).toBeVisible();
   await Promise.all([game.context, asha.context, bilal.context].map((c) => c.close()));
 });
+
+test('an answer tapped while the connection is down is delivered after the phone reconnects (and is not shown as locked in until the server confirms)', async ({
+  browser,
+}) => {
+  const game = await startGame(browser);
+  const asha = await joinPlayer(browser, game.pin, 'Asha');
+  const bilal = await joinPlayer(browser, game.pin, 'Bilal');
+  let drop: (() => void) | undefined;
+  await asha.page.routeWebSocket(/\/ws\//, (ws) => {
+    ws.connectToServer();
+    drop = () => void ws.close();
+  });
+  await asha.page.reload();
+  await expect(asha.page.getByText("You're in!")).toBeVisible();
+  await openQuestion(game.page, [asha, bilal]);
+
+  drop?.();
+  await tile(asha, 'B').click(); // the socket is closed right now: the answer waits in the queue
+  await tile(bilal, 'B').click();
+  await expect(asha.page.getByText('Correct!')).toBeVisible(); // arrived after reconnect + rejoin, then the question closed
+  await Promise.all([game.context.close(), asha.context.close(), bilal.context.close()]);
+});

@@ -53,6 +53,8 @@ interface PlayerRec {
   warnQueue: string[];
   kickOverridden: boolean;
   pendingRemovalAt: number | null;
+  /** When their last socket dropped; used for a short reconnect grace before a question closes early. */
+  dropAt?: number | null;
 }
 
 interface FlagRec {
@@ -118,6 +120,8 @@ export interface InitPayload {
 const qKey = (i: number) => `q:${String(i).padStart(3, '0')}`;
 const MAX_MSG_BYTES = 4096;
 const CLEANUP_AFTER_END_MS = 10 * 60_000;
+/** A phone that drops mid-question gets this long to come back before "everyone answered" can close the question. */
+const RECONNECT_GRACE_MS = 6000;
 const IDLE_CLEANUP_MS = 6 * 60 * 60_000;
 
 const log = (event: string, data: Record<string, unknown> = {}) => console.log(JSON.stringify({ event, ...data }));
@@ -253,7 +257,21 @@ export class GameRoom extends DurableObject<Env> {
   /* WebSocket handlers                                                  */
   /* ------------------------------------------------------------------ */
 
+  /**
+   * Messages from one socket are handled strictly in order. `join` awaits a hash, so without this an answer sent
+   * right behind it (a reconnecting phone flushing its queue) could be processed before the player was identified.
+   */
+  private chains = new WeakMap<WebSocket, Promise<void>>();
+
   async webSocketMessage(ws: WebSocket, data: string | ArrayBuffer): Promise<void> {
+    const next = (this.chains.get(ws) ?? Promise.resolve())
+      .then(() => this.handleMessage(ws, data))
+      .catch((e) => log('message_error', { error: String(e) }));
+    this.chains.set(ws, next);
+    await next;
+  }
+
+  private async handleMessage(ws: WebSocket, data: string | ArrayBuffer): Promise<void> {
     const s = this.state;
     if (!s || typeof data !== 'string' || data.length > MAX_MSG_BYTES) return this.drop();
     if (!this.allow(ws)) {
@@ -312,12 +330,14 @@ export class GameRoom extends DurableObject<Env> {
       );
       if (p && !stillConnected && !p.removed) {
         const now = Date.now();
+        p.dropAt = now;
         if (!p.awaySince) p.awaySince = { kind: 'left', at: now };
         await this.save();
         this.broadcastRoster();
         if (s.phase === 'question') {
           this.broadcastProgress();
           await this.maybeCloseEarly(s);
+          await this.scheduleAlarm(); // wake up when the reconnect grace ends
         }
       }
     }
@@ -343,6 +363,8 @@ export class GameRoom extends DurableObject<Env> {
         await this.removePlayer(s, p, 'strikes');
       }
     }
+    // A reconnect grace may just have run out for the last player we were waiting on.
+    await this.maybeCloseEarly(s);
 
     if (s.cleanupAt !== null && now >= s.cleanupAt) {
       log('game_cleanup', { pin: s.pin });
@@ -368,6 +390,11 @@ export class GameRoom extends DurableObject<Env> {
     if (s.phase === 'getready') c.push(s.getReadyEndsAt);
     if (s.phase === 'question' && s.pausedAt === null) c.push(s.endsAt);
     for (const p of Object.values(s.players)) if (p.pendingRemovalAt !== null && !p.removed) c.push(p.pendingRemovalAt);
+    if (s.phase === 'question' && s.pausedAt === null) {
+      for (const p of Object.values(s.players)) {
+        if (p.dropAt && !p.removed && p.dropAt + RECONNECT_GRACE_MS > Date.now()) c.push(p.dropAt + RECONNECT_GRACE_MS);
+      }
+    }
     if (s.cleanupAt !== null) c.push(s.cleanupAt);
     return c.length ? Math.min(...c) : null;
   }
@@ -468,6 +495,7 @@ export class GameRoom extends DurableObject<Env> {
     }
     ws.serializeAttachment({ role: 'player', playerId: p.id } satisfies Attachment);
 
+    p.dropAt = null;
     this.handleReturn(s, p, now, 'left');
     await this.save();
     this.send(ws, this.phaseMsg({ role: 'player', playerId: p.id }));
@@ -940,8 +968,12 @@ export class GameRoom extends DurableObject<Env> {
   private async maybeCloseEarly(s: GameState): Promise<void> {
     if (s.phase !== 'question' || s.pausedAt !== null) return;
     const online = this.connectedIds();
-    const connected = this.activePlayers(s).filter((p) => online.has(p.id));
-    if (!connected.length) return;
+    const now = Date.now();
+    // Players whose phone dropped a moment ago still count: their answer may be waiting in the reconnect queue.
+    const connected = this.activePlayers(s).filter(
+      (p) => online.has(p.id) || (p.dropAt && now - p.dropAt < RECONNECT_GRACE_MS),
+    );
+    if (!online.size || !connected.length) return;
     const answers = s.answers[s.qIndex] ?? {};
     if (connected.every((p) => answers[p.id])) {
       await this.closeQuestion(s, Date.now());

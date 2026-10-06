@@ -103,7 +103,9 @@ export class GameSocket {
         if (id)
           this.sendNow({ t: 'join', nickname: id.nickname, avatar: id.avatar, playerId: id.playerId, token: id.token });
       }
-      for (const q of this.queue.splice(0)) ws.send(q);
+      // Hosts/screens are identified by their ticket, so they can flush now. A player must be re-identified
+      // first: anything sent before the server has processed `join` would be ignored.
+      if (this.role !== 'player') this.flush();
     };
     ws.onmessage = (e) => {
       let msg: ServerMsg;
@@ -123,6 +125,7 @@ export class GameSocket {
       }
       if (msg.t === 'error' && ['not_found', 'ended', 'removed', 'forbidden'].includes(msg.code))
         this.closedByUs = true;
+      if (msg.t === 'joined' && this.role === 'player') this.flush();
       useGame.getState().apply(msg);
     };
     ws.onclose = () => {
@@ -141,6 +144,11 @@ export class GameSocket {
     useGame.getState().set({ status: 'reconnecting' });
     const delay = Math.min(500 * 2 ** this.attempt++, 5000);
     this.timer = setTimeout(() => !this.closedByUs && void this.open(), delay);
+  }
+
+  private flush(): void {
+    if (this.ws?.readyState !== WebSocket.OPEN) return;
+    for (const q of this.queue.splice(0)) this.ws.send(q);
   }
 
   private sendNow(msg: ClientMsg): void {

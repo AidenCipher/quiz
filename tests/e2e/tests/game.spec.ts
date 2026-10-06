@@ -67,7 +67,7 @@ test('host and five players play a full game', async ({ browser }) => {
   await hostNext(host);
   await expect(host.getByText('Final standings')).toBeVisible();
   await hostNext(host);
-  await expect(host.getByText('Podium')).toBeVisible();
+  await expect(host.getByText('🏆 Podium')).toBeVisible();
   await expect(p1.page.getByText('Final rank')).toBeVisible();
   await expect(p1.page.getByText('#1', { exact: true })).toBeVisible();
 

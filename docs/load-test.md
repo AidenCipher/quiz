@@ -12,8 +12,8 @@
 | Every answer accepted | pass (2250 / 2250) |
 | All 150 answers sent in about 1 s per question | pass |
 | Every player receives every reveal | pass |
-| Reveal reaches players < 500 ms after the last answer | pass: p50 29 ms, p95 40 ms, max 45 ms (was p95 3.6 s before the fix below) |
-| Answer ack latency | p50 9 ms, p95 24 ms, max 59 ms |
+| Reveal reaches players < 500 ms after the last answer | pass: p50 28–29 ms, p95 38–190 ms, max 41–199 ms across four runs (was p95 3.6 s before the fix below) |
+| Answer ack latency | p50 8–9 ms, p95 24–26 ms, max 59–187 ms |
 | Results for all players saved | pass |
 
 Traffic for the whole game: 2,400 messages from players (150 joins + 2,250 answers), about 11,850 messages to them, 3.1 MiB.

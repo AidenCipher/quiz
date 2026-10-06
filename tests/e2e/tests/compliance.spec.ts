@@ -223,7 +223,7 @@ test.describe('data deletion', () => {
     await hostNext(game.page); // leaderboard
     await expect(game.page.getByText('Final standings')).toBeVisible();
     await hostNext(game.page); // podium
-    await expect(game.page.getByText('Podium')).toBeVisible();
+    await expect(game.page.getByText('🏆 Podium')).toBeVisible();
     await hostNext(game.page); // full results
     await expect(game.page.getByRole('cell', { name: 'Bob' })).toBeVisible();
     await expect(game.page.getByRole('cell', { name: 'Ann' })).toHaveCount(0);
@@ -242,7 +242,7 @@ test.describe('data deletion', () => {
     await hostNext(game.page); // leaderboard
     await expect(game.page.getByText('Final standings')).toBeVisible();
     await hostNext(game.page); // podium
-    await expect(game.page.getByText('Podium')).toBeVisible();
+    await expect(game.page.getByText('🏆 Podium')).toBeVisible();
     await game.page.mouse.move(300, 300);
     await game.page.getByRole('button', { name: 'End game' }).click();
     await expect(game.page).toHaveURL(/\/host$/);
@@ -429,7 +429,7 @@ test('dashboard, builder, dialogs, results and every in-game phone screen pass a
   await game.page.mouse.move(300, 300); // wake the auto-hiding control bar
   await game.page.getByRole('button', { name: 'End', exact: true }).click();
   await game.page.getByRole('alertdialog').getByRole('button', { name: 'End and show podium' }).click();
-  await expect(game.page.getByText('Podium')).toBeVisible();
+  await expect(game.page.getByText('🏆 Podium')).toBeVisible();
   await scan(p.page); // podium
   await game.page.mouse.move(300, 300);
   await game.page.getByRole('button', { name: 'End game' }).click();

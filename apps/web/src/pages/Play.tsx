@@ -457,6 +457,8 @@ function Answer({
     setSentText('');
   }, [idx]);
 
+  // "Locked in" is only shown once the server has confirmed the answer (or already had it before a reload).
+  const confirmed = (ack?.q === idx && ack.ok) || phase.answered === true;
   const rejected = ack && ack.q === idx && !ack.ok && ack.reason !== 'duplicate' ? ack.reason : null;
   const closed = rejected === 'late' || rejected === 'closed' || remaining <= 0;
   const locked = (sent && !phase.allowChange) || closed || phase.paused;
@@ -544,7 +546,7 @@ function Answer({
           <button className="btn btn-primary btn-lg" disabled={locked || !text.trim()} type="submit">
             Submit
           </button>
-          {sent && <LockedIn detail={sentText ? `“${sentText}”` : undefined} />}
+          {sent && (confirmed ? <LockedIn detail={sentText ? `“${sentText}”` : undefined} /> : <Sending />)}
         </form>
       ) : (
         <div
@@ -584,7 +586,9 @@ function Answer({
         </div>
       )}
 
-      {phase.qtype !== 'text' && sent && <LockedIn detail={phase.allowChange ? 'Tap another to change' : undefined} />}
+      {phase.qtype !== 'text' &&
+        sent &&
+        (confirmed ? <LockedIn detail={phase.allowChange ? 'Tap another to change' : undefined} /> : <Sending />)}
       {closed && !sent && (
         <div role="status" className="muted-on-dark" style={{ textAlign: 'center', fontWeight: 700 }}>
           Time's up
@@ -593,6 +597,12 @@ function Answer({
     </div>
   );
 }
+
+const Sending = () => (
+  <div role="status" className="muted-on-dark" style={{ textAlign: 'center', fontWeight: 700, fontSize: 18 }}>
+    Sending…
+  </div>
+);
 
 const LockedIn = ({ detail }: { detail?: string }) => (
   <div
