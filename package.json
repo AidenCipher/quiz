@@ -5,10 +5,11 @@
     "dev": "pnpm -r --parallel --filter @quiz/web --filter @quiz/worker dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test",
+    "test": "pnpm -r --filter '!@quiz/e2e' test",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "setup:local": "cp -n apps/worker/.dev.vars.example apps/worker/.dev.vars; pnpm --filter @quiz/worker db:migrate:local"
+    "setup:local": "cp -n apps/worker/.dev.vars.example apps/worker/.dev.vars; pnpm --filter @quiz/worker db:migrate:local",
+    "test:e2e": "pnpm --filter @quiz/e2e test"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

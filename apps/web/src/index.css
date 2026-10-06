@@ -131,6 +131,9 @@ button {
   border: 1px solid var(--line);
   background: #fff;
 }
+.label.muted-on-dark {
+  color: var(--on-stage-muted);
+}
 .input-dark {
   background: var(--stage-2);
   border-color: #38425f;

@@ -40,9 +40,14 @@ phones never receive question text or the correct answer.
 
 ```bash
 pnpm test        # shared unit tests, web reducer/CSV tests, Worker + Durable Object integration tests
+pnpm test:e2e    # Playwright: full game with 5 phones, anti-cheat flows, reconnects, axe accessibility scans
 pnpm typecheck
 pnpm lint
 ```
+
+The e2e suite needs a one-time `pnpm --filter @quiz/e2e exec playwright install chromium`. It builds the app and starts its own
+Worker with a throwaway local database on port 8788. Headless Chromium has no real tab visibility, so the tests drive the Page
+Visibility API (`setHidden` in `tests/e2e/tests/helpers.ts`); real tab/app switching is covered by the manual device checklist.
 
 ## Deploy (Cloudflare, free plan)
 
