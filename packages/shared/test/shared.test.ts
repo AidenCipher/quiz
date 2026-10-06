@@ -129,7 +129,11 @@ describe('avatar, nickname, schemas', () => {
     expect(checkNickname('a').ok).toBe(false);
     expect(checkNickname('x'.repeat(17)).ok).toBe(false);
     expect(checkNickname('fuck').ok).toBe(false);
-    expect(checkNickname('Blunder')).toEqual({ ok: true, nickname: 'Blunder' });
+    expect(checkNickname('f.u.c.k').ok).toBe(false);
+    expect(checkNickname('Sh1t').ok).toBe(false);
+    for (const fine of ['Blunder', 'Scunthorpe', 'Class Clown', 'Assam Tea', 'Cocktail'.slice(0, 4) + 'y', 'Riya']) {
+      expect(checkNickname(fine).ok, fine).toBe(true);
+    }
   });
   it('suffixes duplicates', () => {
     expect(uniqueNickname('Riya', ['riya'])).toBe('Riya 2');

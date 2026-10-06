@@ -1,22 +1,40 @@
-import {
-  RegExpMatcher,
-  englishDataset,
-  englishRecommendedTransformers,
-} from 'obscenity';
 import { NICKNAME_MAX, NICKNAME_MIN } from './constants';
 
-const matcher = new RegExpMatcher({
-  ...englishDataset.build(),
-  ...englishRecommendedTransformers,
-});
+/**
+ * Small, dependency-free word filter. Long stems are matched anywhere in the squashed text
+ * (catches "f.u.c.k", "fuuuck"); short words only as whole tokens to avoid the Scunthorpe problem.
+ * Extend the lists (including transliterated Hindi/Kannada) as needed.
+ */
+const STEMS = [
+  'fuck', 'shit', 'bitch', 'bastard', 'asshole', 'whore', 'slut', 'nigg', 'fagg',
+  'retard', 'rapist', 'nazi', 'pussy', 'wanker', 'twat', 'porn',
+  'chutiya', 'madarchod', 'bhosd', 'gaandu', 'bhenchod', 'behenchod', 'harami', 'kutta', 'kamine',
+];
+const WORDS = ['dick', 'cunt', 'cunts', 'cock', 'cocks', 'ass', 'sex', 'fag', 'rape', 'tit', 'tits', 'cum', 'anal', 'hoe', 'dildo', 'lund', 'randi', 'gand', 'bc', 'mc'];
 
-/** Starter transliterated Hindi/Kannada list; extend as needed. */
-const EXTRA_BLOCKED = ['chutiya', 'madarchod', 'bhosdi', 'gaandu', 'bhenchod'];
+const LEET: Record<string, string> = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '@': 'a', $: 's', '!': 'i' };
+
+function squash(text: string): string {
+  const mapped = text
+    .normalize('NFD')
+    .replace(/\p{M}+/gu, '')
+    .toLowerCase()
+    .replace(/[01345 7@$!]/g, (c) => LEET[c] ?? c);
+  return mapped.replace(/[^a-z]/g, '').replace(/(.)\1+/g, '$1');
+}
 
 export function isProfane(text: string): boolean {
-  if (matcher.hasMatch(text)) return true;
-  const squashed = text.toLowerCase().replace(/[^a-z]/g, '');
-  return EXTRA_BLOCKED.some((w) => squashed.includes(w));
+  const tokens = text
+    .normalize('NFD')
+    .replace(/\p{M}+/gu, '')
+    .toLowerCase()
+    .split(/[^a-z0-9@$!]+/)
+    .filter(Boolean)
+    .map(squash);
+  if (tokens.some((t) => WORDS.includes(t))) return true;
+  const all = squash(text);
+  const collapsedStems = STEMS.map(squash);
+  return collapsedStems.some((w) => all.includes(w));
 }
 
 export function cleanNickname(raw: string): string {

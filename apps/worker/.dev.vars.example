@@ -1,0 +1,6 @@
+# Copy to .dev.vars for local development (pnpm setup:local does this for you).
+SESSION_SECRET=dev-only-secret-change-me
+DEV_LOGIN=1
+# Optional: real Google sign-in
+# GOOGLE_CLIENT_ID=
+# GOOGLE_CLIENT_SECRET=
