@@ -1,0 +1,11 @@
+{
+  "name": "quiz-arena",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter @quiz/web --filter @quiz/worker dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "lint": "eslint . && prettier --check ."
+  }
+}
