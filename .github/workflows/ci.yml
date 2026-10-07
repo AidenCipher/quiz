@@ -3,6 +3,11 @@ on:
   pull_request:
   push:
     branches: [main, staging]
+    # Documentation-only pushes need no test run and must not trigger a production deploy.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'LICENSE'
 
 jobs:
   check:
