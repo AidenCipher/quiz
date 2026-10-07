@@ -14,6 +14,7 @@ import { QuestionLayout } from '../components/BigScreen';
 import { api } from '../lib/api';
 import { SkipLink } from '../components/Chrome';
 import { HostConsentDialog } from '../components/Dialogs';
+import { GenerateDialog } from '../components/GenerateDialog';
 import { csvToQuestions, download, questionsToCsv } from '../lib/csv';
 import { useDialog } from '../lib/useDialog';
 
@@ -54,6 +55,7 @@ export default function Builder() {
   const [loaded, setLoaded] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showConsent, setShowConsent] = useState(false);
+  const [showGenerate, setShowGenerate] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [hosting, setHosting] = useState(false);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
@@ -142,6 +144,16 @@ export default function Builder() {
       return next;
     });
     setSel(to);
+    touch();
+  };
+
+  /** Reviewed questions from the Claude helper. A brand-new quiz's single empty starter question is replaced, not kept. */
+  const addGenerated = (added: Question[]) => {
+    const emptyStarter = questions.length === 1 && !questions[0]!.text && questions[0]!.options.every((o) => !o);
+    const base = emptyStarter ? [] : questions;
+    setQuestions([...base, ...added].slice(0, MAX_QUESTIONS));
+    setSel(base.length);
+    setShowGenerate(false);
     touch();
   };
 
@@ -239,6 +251,9 @@ export default function Builder() {
         </span>
         <button className="btn" onClick={() => setShowSettings(true)}>
           ⚙ Game settings
+        </button>
+        <button className="btn" onClick={() => setShowGenerate(true)}>
+          <span aria-hidden="true">✨</span> Write questions with Claude
         </button>
         <button className="btn" onClick={() => fileRef.current?.click()}>
           Import
@@ -409,6 +424,13 @@ export default function Builder() {
         )}
       </div>
 
+      {showGenerate && (
+        <GenerateDialog
+          existing={questions.map((q) => q.text)}
+          onAdd={addGenerated}
+          onClose={() => setShowGenerate(false)}
+        />
+      )}
       {showConsent && (
         <HostConsentDialog onCancel={() => setShowConsent(false)} onConfirm={() => void startHosting()} />
       )}

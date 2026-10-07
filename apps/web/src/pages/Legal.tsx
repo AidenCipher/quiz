@@ -67,6 +67,13 @@ export function Privacy() {
           The quizzes you write (including any images you upload and their alt text) and the results of games you ran.
         </li>
       </ul>
+      <h3>The question-writing helper (optional)</h3>
+      <p>
+        Hosts can ask Claude to draft questions. This works by copy and paste: the editor writes a prompt from the
+        topics you type, you paste it into <b>claude.ai</b> yourself, and you paste Claude's reply back. {site.name}{' '}
+        never contacts Anthropic or sends your topics anywhere. What you type into claude.ai is governed by your own
+        Claude account and Anthropic's terms. Questions you add are stored like any other question in your quiz.
+      </p>
       <h3>What we do not collect</h3>
       <p>
         Real names, email addresses of players, phone numbers, location, device identifiers, advertising identifiers,
@@ -327,6 +334,13 @@ export function Trust() {
           remove anyone.
         </li>
       </ul>
+
+      <h2>AI-drafted questions</h2>
+      <p>
+        If a host drafts questions with Claude, they review every question before it goes into a quiz, and can edit or
+        remove any of them. AI can be confidently wrong, so the host is responsible for checking answers. {site.name}{' '}
+        does not send quiz or player data to any AI service.
+      </p>
 
       <h2>Children</h2>
       <p>

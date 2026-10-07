@@ -3,7 +3,7 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
 import { demoQuiz, hostNext, joinPlayer, openQuestion, startGame, tile } from './helpers';
 
 const policyPages = [
-  { path: '/privacy', heading: 'Privacy policy', mentions: ['Nickname', 'Cloudflare', '30 days'] },
+  { path: '/privacy', heading: 'Privacy policy', mentions: ['Nickname', 'Cloudflare', '30 days', 'claude.ai'] },
   { path: '/cookies', heading: 'Cookie and storage policy', mentions: ['qa_session', 'strictly necessary'] },
   { path: '/trust', heading: 'Trust & safety', mentions: ['Phones never receive the question text', 'cannot see'] },
   { path: '/refunds', heading: 'Pricing & refunds', mentions: ['is free', 'nothing to refund'] },

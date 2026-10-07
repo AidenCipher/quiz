@@ -29,6 +29,13 @@ Simulate players (optionally with tab-switchers) against a live game:
 node tests/load/bots.mjs <PIN> 30 localhost:8787 --cheat=3
 ```
 
+## Writing questions with Claude
+
+In the quiz editor, **✨ Write questions with Claude** takes your topics, a difficulty (easy, medium, hard or mixed), a count and the question types, and builds a prompt.
+You paste it into claude.ai, paste Claude's reply back, review every question (untick any you doubt), and add them to the quiz. It works with a normal Claude
+subscription because nothing calls an API: Anthropic bills its API separately from Pro/Max plans, which is why there is no one-click version. Answer positions are shuffled,
+duplicates and malformed items are dropped with a reason, and timers follow the difficulty. The logic is in `packages/shared/src/generate.ts` with tests.
+
 ## Host keyboard shortcuts
 
 | Key | Does |
