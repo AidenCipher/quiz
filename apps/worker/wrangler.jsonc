@@ -23,6 +23,7 @@
   ],
   "triggers": { "crons": ["17 21 * * *"] },
   "observability": { "enabled": true },
+  "preview_urls": false,
   "vars": { "DEV_LOGIN": "0" },
   "env": {
     "staging": {
@@ -30,6 +31,7 @@
       "durable_objects": { "bindings": [{ "name": "GAME_ROOM", "class_name": "GameRoom" }] },
       "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }],
       "observability": { "enabled": true },
+      "preview_urls": false,
       // DEV_LOGIN is deliberately absent (= off). Switch it on only while load testing:
       //   npx wrangler secret put DEV_LOGIN --env staging   (value 1), and delete it afterwards.
       "vars": {},
