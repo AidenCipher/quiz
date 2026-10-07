@@ -64,13 +64,9 @@ square of the player count, in `apps/worker/src/room.ts`:
 Fix: one pass over the sockets (`connectedIds`), and the scoreboard is computed once per broadcast. A worker test (`150 simultaneous answers…`) fails on the old code
 (3.7 s) and passes now, so this cannot quietly regress.
 
-## Not measured, and why
+## How to repeat it, and what is still not covered
 
-- **The game room's own processing time.** The host debug panel (key D) and the load test report "last answer → reveal sent" from the room's clock, but Cloudflare freezes `Date.now()` while code is running, so this only counts time spent waiting on storage or the network. It reads 0 ms on staging, which means nothing was waiting, not that the work was free. Real CPU time per game is visible in the Cloudflare dashboard (Workers CPU time, Durable Object duration) once its analytics catch up.
-
-- **Staging runs need the dev login.** Turn it on only for the test: `npx wrangler secret put DEV_LOGIN --env staging` (value `1`), run `node tests/load/load.mjs 150 15 https://<staging-host>`, then `npx wrangler secret delete DEV_LOGIN --env staging`. Never set it in production.
-- **Daily-allowance usage per game.** The plan asks for this; it can only be read from the Cloudflare dashboard after a staging run. From the traffic above, a 150-player
-  game is about 150 connections plus roughly 2,400 incoming messages (billed at 20 messages per request), well under the free plan's 100,000 requests/day.
-- **Storage writes on real Cloudflare.** Each answer is now saved as its own small key (`a:<question>:<player>`, about 40 bytes) instead of rewriting the whole game state. In a worker test with
-  100 players, 99 answers wrote 4 KB in total, against 3.06 MB (and 99 rewrites of the game record) before. A 150-player, 15-question game is about 2,250 small writes. The staging figures above confirm it: about 2.6k rows written per 150-player game.
-- Real phones, flaky Wi-Fi and the iOS tab-suspension behaviour are covered by the manual device checklist, not by this script.
+- **Staging runs need the dev login.** Turn it on only for the test: `npx wrangler secret put DEV_LOGIN --env staging` (value `1`), run `node tests/load/load.mjs 150 15 https://<staging-host>`, then `npx wrangler secret delete DEV_LOGIN --env staging` and confirm `/api/me` reports `"devLogin":false`. Never set it in production.
+- **The game room's own processing time is not measurable from inside Workers.** The host debug panel (key D) and the load test report "last answer → reveal sent" from the room's clock, but Cloudflare freezes `Date.now()` while code is running, so this only counts time spent waiting on storage or the network. It reads 0 ms on staging, which means nothing was waiting, not that the work was free. Use the dashboard's Durable Object duration (about 1 GB-sec per 150-player game) for the real cost.
+- **Storage writes:** each answer is saved as its own small key (`a:<question>:<player>`, about 40 bytes) instead of rewriting the whole game state. In a worker test with 100 players, 99 answers wrote 4 KB in total, against 3.06 MB before. The staging figures above show about 2.6k rows written per 150-player game.
+- **Real phones, flaky Wi-Fi and the iOS tab-suspension behaviour** are covered by the manual device checklist, not by this script. One laptop on one connection also cannot show how 150 separate phone connections behave.
