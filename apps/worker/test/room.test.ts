@@ -3,7 +3,7 @@ import { runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { defaultSettings, newQuestion, type GameSettings, type Question } from '@quiz/shared';
 import { signTicket } from '../src/crypto';
-import type { InitPayload } from '../src/room';
+import { GameRoom, type InitPayload } from '../src/room';
 
 type Msg = Record<string, any>;
 
@@ -169,9 +169,11 @@ describe('connections and joining', () => {
     const stored = await runInDurableObject(stub, async (_i, state) => ({
       game: await state.storage.get<any>('game'),
       qs: [...(await state.storage.list({ prefix: 'q:' })).keys()],
+      answerRec: await state.storage.get<any>(`a:000:${a.playerId}`),
     }));
     expect(stored.game.phase).toBe('question');
-    expect(stored.game.answers[0][a.playerId].option).toBe(2);
+    expect(stored.game.answers).toBeUndefined(); // answers live in their own keys
+    expect(stored.answerRec.option).toBe(2);
     expect(Object.keys(stored.game.players)).toHaveLength(2);
     expect(stored.game.players[a.playerId].tokenHash).not.toContain(a.token); // only a hash is stored
     expect(stored.qs).toEqual(['q:000', 'q:001']);
@@ -493,6 +495,63 @@ describe('scale', () => {
   }, 60_000);
 });
 
+describe('answer persistence', () => {
+  async function playersAnswering(n: number) {
+    const { stub, pin } = await makeGame({ questions: [mcq('Q1', 1, 30), mcq('Q2', 0, 30)] });
+    const host = await openHost(stub, pin);
+    const bots: Client[] = [];
+    for (let i = 0; i < n; i++) bots.push(await join(stub, `Bot ${i}`));
+    host.send({ t: 'start' });
+    await host.waitFor((m) => m.t === 'getready');
+    host.send({ t: 'skip' });
+    await Promise.all(bots.map((b) => b.waitFor((m) => m.t === 'question')));
+    return { stub, pin, host, bots };
+  }
+
+  it('saving an answer writes only that answer, not the whole game (write volume stays small at 100 players)', async () => {
+    const { stub, host, bots } = await playersAnswering(100);
+    const writes = await runInDurableObject(stub, async (_i, state) => {
+      const counter = { puts: 0, bytes: 0, gameBlobs: 0 };
+      const put = state.storage.put.bind(state.storage) as (...a: unknown[]) => Promise<void>;
+      (state.storage as unknown as { put: unknown }).put = (...args: unknown[]) => {
+        counter.puts++;
+        counter.bytes += JSON.stringify(args).length;
+        const first = args[0];
+        if (first === 'game' || (typeof first === 'object' && first !== null && 'game' in first)) counter.gameBlobs++;
+        return put(...args);
+      };
+      (globalThis as unknown as { __writes: typeof counter }).__writes = counter;
+      return counter;
+    });
+    void writes;
+    for (const b of bots.slice(0, 99)) b.send({ t: 'answer', q: 0, option: 1 });
+    await Promise.all(bots.slice(0, 99).map((b) => b.waitFor((m) => m.t === 'answerAck' && m.ok)));
+    const during = await runInDurableObject(stub, async () => ({
+      ...(globalThis as unknown as { __writes: Record<string, number> }).__writes,
+    }));
+    expect(during.puts).toBe(99); // one small write per answer…
+    expect(during.gameBlobs).toBe(0); // …and the game record is not rewritten
+    expect(during.bytes).toBeLessThan(99 * 100); // ~40 bytes each; saving the whole state wrote ~31 KB per answer (3.06 MB total) at this size
+    bots[99]!.send({ t: 'answer', q: 0, option: 1 });
+    await host.waitFor((m) => m.t === 'reveal');
+  }, 60_000);
+
+  it('answers survive a restart: a fresh instance rebuilds them from their keys and keeps scoring correctly', async () => {
+    const { stub, bots } = await playersAnswering(5);
+    for (const [i, b] of bots.entries()) b.send({ t: 'answer', q: 0, option: i < 3 ? 1 : 0 });
+    await Promise.all(bots.map((b) => b.waitFor((m) => m.t === 'reveal')));
+    const rebuilt = await runInDurableObject(stub, async (_i, state) => {
+      const fresh = new GameRoom(state, env as never);
+      await new Promise((r) => setTimeout(r, 50)); // the constructor loads inside blockConcurrencyWhile
+      const answers = (fresh as unknown as { state: { answers: Record<number, Record<string, { option: number }>> } })
+        .state.answers;
+      const correct = Object.values(answers[0] ?? {}).filter((a) => a.option === 1).length;
+      return { count: Object.keys(answers[0] ?? {}).length, correct };
+    });
+    expect(rebuilt).toEqual({ count: 5, correct: 3 });
+  });
+});
+
 describe('right to erasure', () => {
   it('a player can erase themselves: gone from the roster, answers, flags and saved results', async () => {
     const { stub, pin } = await makeGame({ questions: [mcq('Q1', 1)] });
@@ -509,8 +568,11 @@ describe('right to erasure', () => {
     await a.waitFor((m) => m.t === 'left');
     await a.waitFor(() => a.closed);
     const stored = await runInDurableObject(stub, async (_i, state) => state.storage.get<any>('game'));
+    const keys = await runInDurableObject(stub, async (_i, state) => [
+      ...(await state.storage.list({ prefix: 'a:' })).keys(),
+    ]);
+    expect(keys.some((k) => k.endsWith(`:${a.playerId}`))).toBe(false); // the answer record is deleted too
     expect(stored.players[a.playerId]).toBeUndefined();
-    expect(stored.answers[0][a.playerId]).toBeUndefined();
     expect(JSON.stringify(stored)).not.toContain('Ann');
     // The remaining player still finishes the game, and the saved results never mention Ann.
     b.send({ t: 'answer', q: 0, option: 1 });

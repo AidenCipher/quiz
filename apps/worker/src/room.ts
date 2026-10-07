@@ -118,6 +118,8 @@ export interface InitPayload {
 }
 
 const qKey = (i: number) => `q:${String(i).padStart(3, '0')}`;
+/** One storage key per answer: saving an answer writes ~50 bytes instead of rewriting the whole game. */
+const answerKey = (q: number, pid: string) => `a:${String(q).padStart(3, '0')}:${pid}`;
 const MAX_MSG_BYTES = 4096;
 const CLEANUP_AFTER_END_MS = 10 * 60_000;
 /** A phone that drops mid-question gets this long to come back before "everyone answered" can close the question. */
@@ -138,10 +140,17 @@ export class GameRoom extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     ctx.blockConcurrencyWhile(async () => {
-      this.state = (await ctx.storage.get<GameState>('game')) ?? null;
+      const stored = await ctx.storage.get<GameState>('game');
+      this.state = stored ? { ...stored, answers: stored.answers ?? {} } : null; // `answers` is kept in its own keys
       if (this.state) {
         const entries = await ctx.storage.list<Question>({ prefix: 'q:' });
         this.questions = [...entries.values()];
+        const answers = await ctx.storage.list<AnswerRec>({ prefix: 'a:' });
+        for (const [key, rec] of answers) {
+          const [, q, pid] = key.split(':');
+          if (q === undefined || pid === undefined) continue;
+          (this.state.answers[Number(q)] ??= {})[pid] = rec;
+        }
       }
     });
   }
@@ -533,6 +542,7 @@ export class GameRoom extends DurableObject<Env> {
     bucket[p.id] = rec;
 
     // Answered within quickAnswerMs of coming back from a flagged switch: upgrade to major.
+    let stateChanged = false;
     if (p.returnFlag && now - p.returnFlag.at < s.settings.thresholds.quickAnswerMs) {
       const f = s.flags.find((x) => x.id === p.returnFlag!.flagId);
       if (f && !f.cleared && f.q === s.qIndex && f.severity !== 'major') {
@@ -541,10 +551,11 @@ export class GameRoom extends DurableObject<Env> {
         f.quickAnswer = true;
         this.broadcastAll({ t: 'flag', flag: this.flagInfo(s, f) } as ServerMsg);
         this.checkKick(s, p, now);
+        stateChanged = true;
       }
     }
 
-    await this.save();
+    await this.saveAnswer(s.qIndex, p.id, rec, stateChanged);
     ack(true);
     this.broadcastProgress();
     await this.maybeCloseEarly(s);
@@ -677,7 +688,12 @@ export class GameRoom extends DurableObject<Env> {
    */
   private async eraseSelf(s: GameState, p: PlayerRec, ws: WebSocket): Promise<void> {
     delete s.players[p.id];
-    for (const q of Object.keys(s.answers)) delete s.answers[Number(q)]?.[p.id];
+    const erased: string[] = [];
+    for (const q of Object.keys(s.answers)) {
+      if (s.answers[Number(q)]?.[p.id]) erased.push(answerKey(Number(q), p.id));
+      delete s.answers[Number(q)]?.[p.id];
+    }
+    if (erased.length) await this.ctx.storage.delete(erased);
     const gone = new Set(s.flags.filter((f) => f.playerId === p.id).map((f) => f.id));
     s.flags = s.flags.filter((f) => f.playerId !== p.id);
     delete s.prevRanks[p.id];
@@ -1417,8 +1433,19 @@ export class GameRoom extends DurableObject<Env> {
     if (this.dropped % 50 === 1) log('malformed_messages', { count: this.dropped });
   }
 
+  /** Everything except answers, which live in their own keys (see saveAnswer). */
+  private snapshot(): Omit<GameState, 'answers'> {
+    const { answers: _answers, ...rest } = this.state!;
+    return rest;
+  }
+
   private async save(): Promise<void> {
-    if (this.state) await this.ctx.storage.put('game', this.state);
+    if (this.state) await this.ctx.storage.put('game', this.snapshot());
+  }
+
+  private async saveAnswer(q: number, pid: string, rec: AnswerRec, alsoState = false): Promise<void> {
+    if (alsoState) await this.ctx.storage.put({ game: this.snapshot(), [answerKey(q, pid)]: rec });
+    else await this.ctx.storage.put(answerKey(q, pid), rec);
   }
 }
 

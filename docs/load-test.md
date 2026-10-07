@@ -35,6 +35,7 @@ Fix: one pass over the sockets (`connectedIds`), and the scoreboard is computed 
   `node tests/load/load.mjs 150 15 https://<staging-host>` (staging needs `DEV_LOGIN=1`, which must never be set in production).
 - **Daily-allowance usage per game.** The plan asks for this; it can only be read from the Cloudflare dashboard after a staging run. From the traffic above, a 150-player
   game is about 150 connections plus roughly 2,400 incoming messages (billed at 20 messages per request), well under the free plan's 100,000 requests/day.
-- **Storage writes.** The game state is saved as one record on every answer (about 2,250 writes in this game). That is fine locally, but check "rows written" and duration on
-  staging: if it grows, persist answers one key at a time instead of rewriting the whole state.
+- **Storage writes on real Cloudflare.** Each answer is now saved as its own small key (`a:<question>:<player>`, about 40 bytes) instead of rewriting the whole game state. In a worker test with
+  100 players, 99 answers wrote 4 KB in total, against 3.06 MB (and 99 rewrites of the game record) before. A 150-player, 15-question game is about 2,250 small writes. Rows-written and
+  duration figures still need confirming on staging, but the volume no longer grows with players × questions.
 - Real phones, flaky Wi-Fi and the iOS tab-suspension behaviour are covered by the manual device checklist, not by this script.
