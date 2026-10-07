@@ -11,6 +11,8 @@ import {
   MAX_PLAYERS,
   STRIKE_POINTS,
   checkNickname,
+  computeCallouts,
+  flagCallout,
   gradeFlag,
   isProfane,
   isValidAvatar,
@@ -21,6 +23,9 @@ import {
   uniqueNickname,
   type AnswerRec,
   type BoardRow,
+  type Callout,
+  type PlayerOutcome,
+  type QuestionCallouts,
   type ClientMsg,
   type ErrorCode,
   type FlagInfo,
@@ -68,6 +73,7 @@ interface FlagRec {
   at: number;
   cleared: boolean;
   quickAnswer?: boolean;
+  quip?: Callout;
 }
 
 interface GameState {
@@ -101,6 +107,8 @@ interface GameState {
   cleanupAt: number | null;
   alarmAt: number | null;
   resultsSaved: boolean;
+  /** Who got the room-wide callout in earlier questions, so it rotates between people. */
+  spotlights?: { q: number; id: string }[];
 }
 
 interface Attachment {
@@ -561,6 +569,7 @@ export class GameRoom extends DurableObject<Env> {
         f.severity = 'major';
         f.strike = STRIKE_POINTS.major;
         f.quickAnswer = true;
+        if (s.settings.funCallouts) f.quip = flagCallout('major', p.nickname, p.id, f.id);
         this.broadcastAll({ t: 'flag', flag: this.flagInfo(s, f) } as ServerMsg);
         this.checkKick(s, p, now);
         stateChanged = true;
@@ -644,6 +653,7 @@ export class GameRoom extends DurableObject<Env> {
       at: now,
       cleared: false,
     };
+    if (s.settings.funCallouts) flag.quip = flagCallout(severity, p.nickname, p.id, flag.id);
     s.flags.push(flag);
     p.warnQueue.push(flag.id);
     log('flag_raised', { pin: s.pin, severity, kind, awayMs: flag.awayMs });
@@ -978,6 +988,12 @@ export class GameRoom extends DurableObject<Env> {
 
     s.closed = s.qIndex + 1;
     s.phase = 'reveal';
+    // Remember who was in the spotlight so the next questions pick someone else.
+    const spot = s.settings.funCallouts
+      ? this.calloutsFor(s, s.qIndex, this.computeStandings(s).scores)?.spotlight
+      : null;
+    this.calloutCache.clear();
+    if (spot?.playerId) (s.spotlights ??= []).push({ q: s.qIndex, id: spot.playerId });
     s.endsAt = Math.min(s.endsAt, now);
     if (!silent) this.broadcastPhase();
     // Server-side share of "last answer → reveal": from the trigger to the reveal being handed to the sockets.
@@ -1077,6 +1093,41 @@ export class GameRoom extends DurableObject<Env> {
     return { scores, ranked };
   }
 
+  /** Callout cache for the duration of one broadcast (like `frame`). */
+  private calloutCache = new Map<number, QuestionCallouts>();
+
+  /**
+   * Funny callouts for question `i`: seeded by game and question, so a reveal re-sent after a host action keeps
+   * the same lines. `avoid` rotates the spotlight between players across the game.
+   */
+  private calloutsFor(
+    s: GameState,
+    i: number,
+    scores: ReturnType<GameRoom['computeStandings']>['scores'],
+  ): QuestionCallouts | null {
+    if (!s.settings.funCallouts || i >= s.closed) return null;
+    const cached = this.calloutCache.get(i);
+    if (cached) return cached;
+    const answers = s.answers[i] ?? {};
+    const players: PlayerOutcome[] = this.activePlayers(s).map((p) => {
+      const r = scores[p.id]?.perQuestion[i];
+      const outcome = !r ? 'none' : r.voided ? 'voided' : !r.answered ? 'none' : r.correct ? 'right' : 'wrong';
+      return { id: p.id, nickname: p.nickname, outcome, tMs: answers[p.id]?.tMs ?? null, streak: r?.streak ?? 0 };
+    });
+    const recent = (s.spotlights ?? [])
+      .filter((h) => h.q < i)
+      .slice(-3)
+      .map((h) => h.id);
+    const result = computeCallouts({
+      seed: `${s.pin}:${i}`,
+      players,
+      limitMs: s.limits[i] ?? this.questions[i]!.timeLimitS * 1000,
+      avoid: recent,
+    });
+    this.calloutCache.set(i, result);
+    return result;
+  }
+
   private flagInfo(s: GameState, f: FlagRec): FlagInfo {
     return {
       id: f.id,
@@ -1090,6 +1141,7 @@ export class GameRoom extends DurableObject<Env> {
       cleared: f.cleared,
       at: f.at,
       quickAnswer: f.quickAnswer,
+      quip: f.quip,
     };
   }
 
@@ -1294,6 +1346,7 @@ export class GameRoom extends DurableObject<Env> {
         return { id: p.id, nickname: p.nickname, severity: sev };
       });
 
+    const callouts = this.calloutsFor(s, i, scores);
     let you;
     if (isPlayer && who.playerId && scores[who.playerId]) {
       const sc = scores[who.playerId]!;
@@ -1308,6 +1361,7 @@ export class GameRoom extends DurableObject<Env> {
         total: sc.score,
         rank: ranked.find((x) => x.id === who.playerId)?.rank ?? 0,
         answered: r.answered,
+        callout: callouts?.personal.get(who.playerId),
       };
     }
 
@@ -1327,6 +1381,7 @@ export class GameRoom extends DurableObject<Env> {
       image: isPlayer ? undefined : q.image,
       imageAlt: isPlayer ? undefined : q.imageAlt,
       you,
+      callout: callouts?.spotlight ?? null,
       isLast: i + 1 >= s.questionCount,
     };
   }
@@ -1411,6 +1466,7 @@ export class GameRoom extends DurableObject<Env> {
       }
     } finally {
       this.frame = null;
+      this.calloutCache.clear();
     }
   }
 

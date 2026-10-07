@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MAX_ANSWER_TEXT, NICKNAME_MAX } from './constants';
+import type { Callout } from './callouts';
 import { FlagKindSchema, QuestionTypeSchema, SeveritySchema } from './quiz';
 
 /* ---------- client → server ---------- */
@@ -91,6 +92,8 @@ export interface FlagInfo {
   cleared: boolean;
   at: number;
   quickAnswer?: boolean;
+  /** A funny line about the flag, shown on the projector and in the room-wide notice. */
+  quip?: Callout;
 }
 export interface BoardRow {
   id: string;
@@ -112,6 +115,8 @@ export interface YouReveal {
   total: number;
   rank: number;
   answered: boolean;
+  /** Their own funny line when they got it wrong, didn't answer, or are on a streak. */
+  callout?: Callout;
 }
 export interface ResultRow {
   id: string;
@@ -182,6 +187,8 @@ export type ServerMsg =
       imageAlt?: string;
       you?: YouReveal;
       isLast: boolean;
+      /** The room-wide spotlight for this question (a random player, or the whole room). */
+      callout?: Callout | null;
     })
   | (Base & {
       t: 'leaderboard';

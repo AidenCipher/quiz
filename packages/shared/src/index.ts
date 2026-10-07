@@ -7,3 +7,4 @@ export * from './avatar';
 export * from './nickname';
 export * from './protocol';
 export * from './generate';
+export * from './callouts';

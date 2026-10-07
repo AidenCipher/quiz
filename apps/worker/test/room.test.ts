@@ -419,6 +419,121 @@ describe('anti-cheat', () => {
   });
 });
 
+describe('funny callouts', () => {
+  async function room(
+    settings: Partial<GameSettings> = {},
+    questions = [mcq('Q1', 1, 30), mcq('Q2', 1, 30), mcq('Q3', 1, 30)],
+  ) {
+    const g = await makeGame({ settings, questions });
+    const host = await openHost(g.stub, g.pin);
+    const players = [
+      await join(g.stub, 'Ann'),
+      await join(g.stub, 'Bob'),
+      await join(g.stub, 'Cy'),
+      await join(g.stub, 'Di'),
+    ];
+    host.send({ t: 'start' });
+    await host.waitFor((m) => m.t === 'getready');
+    host.send({ t: 'skip' });
+    await Promise.all(players.map((p) => p.waitFor((m) => m.t === 'question')));
+    return { ...g, host, players };
+  }
+
+  it('gives a random player a spotlight and every wrong or silent player their own line, on the projector and phones', async () => {
+    const { host, players } = await room();
+    const [ann, bob, cy, di] = players as [Client, Client, Client, Client];
+    ann.send({ t: 'answer', q: 0, option: 1 }); // right
+    bob.send({ t: 'answer', q: 0, option: 3 }); // wrong
+    cy.send({ t: 'answer', q: 0, option: 0 }); // wrong
+    // Di never answers: host ends the question.
+    await ann.waitFor((m) => m.t === 'answerAck' && m.ok);
+    await cy.waitFor((m) => m.t === 'answerAck' && m.ok);
+    host.send({ t: 'skip' });
+    const reveal = await host.waitFor((m) => m.t === 'reveal');
+    expect(reveal.callout).toBeTruthy();
+    expect(['wrong', 'none', 'fast']).toContain(reveal.callout.kind);
+    expect(players.map((p) => p.playerId)).toContain(reveal.callout.playerId);
+    expect(reveal.callout.text).toContain(reveal.callout.nickname);
+    expect(reveal.callout.text.length).toBeGreaterThan(10);
+
+    const revBob = await bob.waitFor((m) => m.t === 'reveal');
+    expect(revBob.you.callout.kind).toBe('wrong');
+    expect(revBob.you.callout.text).toContain('Bob');
+    const revDi = await di.waitFor((m) => m.t === 'reveal');
+    expect(revDi.you.callout.kind).toBe('none');
+    expect(revDi.you.callout.text).toContain('Di');
+    const revAnn = await ann.waitFor((m) => m.t === 'reveal');
+    expect(revAnn.you.callout === undefined || ['fast', 'streak'].includes(revAnn.you.callout.kind)).toBe(true);
+    // phones get the room's spotlight too
+    expect(revBob.callout?.id).toBe(reveal.callout.id);
+  });
+
+  it('keeps the same callouts when the reveal is sent again after a host action', async () => {
+    const { host, players } = await room();
+    const [ann, bob] = players as [Client, Client, ...Client[]];
+    ann.send({ t: 'answer', q: 0, option: 3 });
+    bob.send({ t: 'answer', q: 0, option: 3 });
+    host.send({ t: 'skip' });
+    const first = await host.waitFor((m) => m.t === 'reveal');
+    const seen = host.msgs.length;
+    host.send({ t: 'lockLobby', locked: true }); // any state change that re-broadcasts the phase is fine
+    host.send({ t: 'acceptAnswer', text: 'x' }); // ignored for mcq
+    host.send({ t: 'clearFlag', flagId: 'nope' });
+    await sleep(300);
+    const again = host.msgs.slice(seen).find((m) => m.t === 'reveal');
+    if (again) expect(again.callout).toEqual(first.callout);
+  });
+
+  it('remembers who had the spotlight, so later questions can pick someone else', async () => {
+    const { stub, host, players } = await room();
+    const [ann, bob, cy] = players as [Client, Client, Client, Client];
+    ann.send({ t: 'answer', q: 0, option: 3 });
+    bob.send({ t: 'answer', q: 0, option: 3 });
+    cy.send({ t: 'answer', q: 0, option: 1 });
+    host.send({ t: 'skip' });
+    const r = await host.waitFor((m) => m.t === 'reveal');
+    const stored = await runInDurableObject(
+      stub,
+      async (_i, state) => (await state.storage.get<any>('game')).spotlights,
+    );
+    expect(stored).toEqual([{ q: 0, id: r.callout.playerId }]);
+  });
+
+  it('can be switched off for a game', async () => {
+    const { host, players } = await room({ funCallouts: false });
+    const [ann, bob] = players as [Client, Client, ...Client[]];
+    ann.send({ t: 'answer', q: 0, option: 3 });
+    bob.send({ t: 'answer', q: 0, option: 3 });
+    host.send({ t: 'skip' });
+    const r = await host.waitFor((m) => m.t === 'reveal');
+    expect(r.callout).toBeNull();
+    expect((await ann.waitFor((m) => m.t === 'reveal')).you.callout).toBeUndefined();
+  });
+
+  it('adds a funny line to every flag, naming the player, and a fresh one when it escalates to major', async () => {
+    const { host, players } = await room();
+    const [ann] = players as [Client, ...Client[]];
+    ann.send({ t: 'presence', state: 'hidden' });
+    await sleep(1200);
+    ann.send({ t: 'presence', state: 'visible' });
+    const flag = (await host.waitFor((m) => m.t === 'flag')).flag;
+    expect(flag.quip.kind).toBe('flag');
+    expect(flag.quip.text).toContain('Ann');
+    ann.send({ t: 'answer', q: 0, option: 1 }); // right after returning: escalates
+    const major = (await host.waitFor((m) => m.t === 'flag' && m.flag.severity === 'major')).flag;
+    expect(major.quip.text).toContain('Ann');
+  });
+
+  it('adds no flag quip when callouts are off', async () => {
+    const { host, players } = await room({ funCallouts: false });
+    const [ann] = players as [Client, ...Client[]];
+    ann.send({ t: 'presence', state: 'hidden' });
+    await sleep(1200);
+    ann.send({ t: 'presence', state: 'visible' });
+    expect((await host.waitFor((m) => m.t === 'flag')).flag.quip).toBeUndefined();
+  });
+});
+
 describe('host debug snapshot', () => {
   it('shows connections, message rate, per-phone round trip, and how the last question closed; host only', async () => {
     const { stub, pin } = await makeGame({ questions: [mcq('Q1', 1, 30)] });

@@ -36,6 +36,8 @@ export const GameSettingsSchema = z.object({
   typoTolerance: z.boolean().default(true),
   music: z.boolean().default(true),
   antiCheat: z.boolean().default(true),
+  /** Funny meme/vine callouts after each question and when someone is flagged. */
+  funCallouts: z.boolean().default(true),
 });
 export type GameSettings = z.infer<typeof GameSettingsSchema>;
 export const defaultSettings = (): GameSettings => GameSettingsSchema.parse({});
