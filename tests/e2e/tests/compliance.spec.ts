@@ -63,6 +63,9 @@ test.describe('policies and business details', () => {
     const text = await (await request.get('/third-party-notices.txt')).text();
     expect(text).toContain('SIL OPEN FONT LICENSE');
     expect(text).toContain('Inter');
+    expect(text).toContain('Bricolage Grotesque');
+    expect(text).toContain('gsap@');
+    expect(text).toContain('three@');
     expect(text).not.toMatch(/\bGPL|AGPL|SSPL\b/);
   });
 });

@@ -11,6 +11,7 @@ export default defineConfig({
       '/ws': { target: 'ws://localhost:8787', ws: true },
     },
   },
-  build: { target: 'es2022', sourcemap: false },
+  // Three.js is a deliberately lazy chunk (home page only); phones joining a game never load it.
+  build: { target: 'es2022', sourcemap: false, chunkSizeWarningLimit: 700 },
   test: { environment: 'jsdom' },
 });

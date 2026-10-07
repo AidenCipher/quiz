@@ -21,10 +21,12 @@ export default function Results() {
     );
   if (!r) return <main style={{ padding: 24 }}>Loading…</main>;
   return (
-    <>
+    <div className="wallpaper host-wall">
       <SkipLink />
       <main id="main" tabIndex={-1} style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
-        <Link to="/host">← My quizzes</Link>
+        <Link to="/host" className="legal-back">
+          <span aria-hidden="true">←</span> My quizzes
+        </Link>
         <header style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '12px 0 20px' }}>
           <h1 style={{ margin: 0, flex: 1 }}>{r.title}</h1>
           <button className="btn btn-primary" onClick={() => download(`quiz-results-${r.pin}.csv`, resultsToCsv(r))}>
@@ -97,6 +99,6 @@ export default function Results() {
         )}
       </main>
       <Footer />
-    </>
+    </div>
   );
 }

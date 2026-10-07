@@ -128,6 +128,8 @@ export class GameSocket {
       }
       if (msg.t === 'error' && ['not_found', 'ended', 'removed', 'forbidden'].includes(msg.code))
         this.closedByUs = true;
+      // The player erased themselves: the server closes this socket next, and we must not reconnect and re-join.
+      if (msg.t === 'left') this.closedByUs = true;
       if (msg.t === 'pong' && this.pingSentAt !== null) {
         this.rtt = Math.round(performance.now() - this.pingSentAt);
         this.pingSentAt = null;

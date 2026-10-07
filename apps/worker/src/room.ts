@@ -989,13 +989,16 @@ export class GameRoom extends DurableObject<Env> {
     s.closed = s.qIndex + 1;
     s.phase = 'reveal';
     // Remember who was in the spotlight so the next questions pick someone else.
-    const spot = s.settings.funCallouts
-      ? this.calloutsFor(s, s.qIndex, this.computeStandings(s).scores)?.spotlight
-      : null;
-    this.calloutCache.clear();
+    // Standings and callouts are computed once and handed to the broadcast, which would otherwise redo both.
+    const st = this.computeStandings(s);
+    const spot = s.settings.funCallouts ? this.calloutsFor(s, s.qIndex, st.scores)?.spotlight : null;
     if (spot?.playerId) (s.spotlights ??= []).push({ q: s.qIndex, id: spot.playerId });
     s.endsAt = Math.min(s.endsAt, now);
-    if (!silent) this.broadcastPhase();
+    if (silent) this.calloutCache.clear();
+    else {
+      this.frame = st;
+      this.broadcastPhase();
+    }
     // Server-side share of "last answer → reveal": from the trigger to the reveal being handed to the sockets.
     this.lastClose = {
       index: s.qIndex,
@@ -1270,6 +1273,7 @@ export class GameRoom extends DurableObject<Env> {
             answered: !!mine,
             myOption: mine?.option,
             allowChange: s.settings.allowAnswerChange,
+            funCallouts: s.settings.funCallouts,
           };
         }
         return {
@@ -1456,7 +1460,7 @@ export class GameRoom extends DurableObject<Env> {
   private broadcastPhase(): void {
     const s = this.state;
     if (!s) return;
-    this.frame = this.computeStandings(s);
+    this.frame ??= this.computeStandings(s);
     try {
       for (const ws of this.sockets()) {
         const att = ws.deserializeAttachment() as Attachment | null;

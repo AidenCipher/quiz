@@ -1,3 +1,4 @@
+import type { Callout } from '@quiz/shared/callouts';
 import type { FlagInfo, LobbyPlayer, ServerMsg } from '@quiz/shared/protocol';
 
 export type PhaseMsg = Extract<
@@ -14,6 +15,7 @@ export interface Notice {
   id: string;
   text: string;
   severity: FlagInfo['severity'];
+  quip?: Callout;
 }
 
 export interface GameView {
@@ -113,7 +115,12 @@ export function reduce(v: GameView, msg: ServerMsg, now = Date.now()): GameView 
       if (isNew) {
         out.notices = [
           ...v.notices,
-          { id: msg.flag.id, text: `👀 ${msg.flag.nickname} was flagged`, severity: msg.flag.severity },
+          {
+            id: msg.flag.id,
+            text: `👀 ${msg.flag.nickname} was flagged`,
+            severity: msg.flag.severity,
+            quip: msg.flag.quip,
+          },
         ].slice(-3);
       }
       return out;

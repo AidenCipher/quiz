@@ -293,14 +293,8 @@ export default function Builder() {
       <div style={{ flex: 1, display: 'flex', minHeight: 0, flexWrap: 'wrap' }}>
         <nav
           aria-label="Questions"
-          style={{
-            width: 300,
-            maxWidth: '100%',
-            flex: 'none',
-            padding: 12,
-            borderRight: '1px solid var(--line)',
-            background: '#fff',
-          }}
+          className="b-nav"
+          style={{ flex: 'none', padding: 12, background: '#fff', minWidth: 0 }}
         >
           <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>
             {questions.map((qq, i) => (
@@ -314,6 +308,7 @@ export default function Builder() {
                   border: `2px solid ${i === sel ? 'var(--accent)' : 'var(--line)'}`,
                   borderRadius: 12,
                   padding: 8,
+                  minWidth: 0,
                   background: i === sel ? '#f0eeff' : '#fff',
                 }}
               >
@@ -326,12 +321,15 @@ export default function Builder() {
                     display: 'flex',
                     gap: 8,
                     alignItems: 'baseline',
+                    minWidth: 0,
                   }}
                   onClick={() => setSel(i)}
                   aria-current={i === sel}
                 >
                   <b>{i + 1}</b>
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span
+                    style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  >
                     {qq.text || <i style={{ color: 'var(--ink-muted)' }}>Empty question</i>}
                   </span>
                   {!validity[i]!.success && (
@@ -407,7 +405,8 @@ export default function Builder() {
             id="main"
             tabIndex={-1}
             aria-label={`Editing question ${sel + 1}`}
-            style={{ flex: 1, minWidth: 320, padding: 16, display: 'grid', gap: 16, alignContent: 'start' }}
+            className="b-main"
+            style={{ flex: 1, padding: 16, display: 'grid', gap: 16, alignContent: 'start' }}
           >
             <Editor
               q={q}
@@ -872,6 +871,11 @@ function SettingsDialog({
         {check('Allow changing an answer before the timer ends', 'allowAnswerChange')}
         {check('Typo tolerance for typed answers', 'typoTolerance')}
         {check('Lobby music', 'music')}
+        {check(
+          'Funny call-outs (meme and vine jokes after answers, flags and no-shows)',
+          'funCallouts',
+          'Playful and kind, never mean. Turn off for a plain, serious game.',
+        )}
         <h3 style={{ margin: '8px 0 0' }}>Severity ladder</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
           {sec(t.blurIgnoreMs, (ms) => setT({ blurIgnoreMs: ms }), 'Ignore focus loss shorter than (s)')}

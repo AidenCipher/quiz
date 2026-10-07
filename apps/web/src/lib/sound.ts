@@ -63,6 +63,30 @@ export const sfx = {
     tone(220, 0.18, 'sawtooth', 0.05);
     tone(185, 0.3, 'sawtooth', 0.05, 0.18);
   },
+  /** A low "vine boom"-style thud: a short sine that drops in pitch (synthesised, not a recording). */
+  boom: () => {
+    if (muted) return;
+    const c = audio();
+    if (!c) return;
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = 'sine';
+    const t = c.currentTime;
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(38, t + 0.45);
+    g.gain.setValueAtTime(0.5, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+    o.connect(g).connect(c.destination);
+    o.start(t);
+    o.stop(t + 0.65);
+  },
+  pop: () => tone(520, 0.09, 'triangle', 0.07),
+  tumble: () => {
+    tone(330, 0.14, 'triangle', 0.04);
+    tone(294, 0.14, 'triangle', 0.04, 0.16);
+    tone(262, 0.3, 'triangle', 0.04, 0.32);
+  },
+  fire: () => [392, 523, 659, 784, 1047].forEach((f, i) => tone(f, 0.16, 'square', 0.04, i * 0.07)),
   fanfare: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.3, 'triangle', 0.08, i * 0.14)),
 };
 

@@ -394,9 +394,10 @@ export function Credits() {
     <Page title="Credits & licences" updated={false}>
       <h2>Fonts</h2>
       <p>
-        Text is set in <strong>Inter</strong>, © The Inter Project Authors, licensed under the SIL Open Font License
-        1.1. It is bundled with the site (self-hosted), not loaded from Google or any other third party. The licence
-        text is in the <a href="/third-party-notices.txt">third-party notices</a>.
+        Text is set in <strong>Inter</strong> (© The Inter Project Authors) and headings in{' '}
+        <strong>Bricolage Grotesque</strong> (© The Bricolage Grotesque Project Authors), both licensed under the SIL
+        Open Font License 1.1. They are bundled with the site (self-hosted), not loaded from Google or any other third
+        party. The licence texts are in the <a href="/third-party-notices.txt">third-party notices</a>.
       </p>
       <h2>Images and artwork</h2>
       <p>
@@ -411,8 +412,9 @@ export function Credits() {
       <h2>Software</h2>
       <p>
         {site.name}'s own source code is released under the MIT licence. It is built with open-source software under
-        permissive licences (MIT, ISC and OFL). The complete list with licence names is in the{' '}
-        <a href="/third-party-notices.txt">third-party notices</a>.
+        permissive licences (MIT, ISC and OFL), including three.js (MIT) for the 3D scenes. The page animations use
+        GSAP, which is free to use under GreenSock's "Standard no-charge licence" (gsap.com/standard-license). The
+        complete list with licence names is in the <a href="/third-party-notices.txt">third-party notices</a>.
       </p>
     </Page>
   );

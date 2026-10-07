@@ -107,22 +107,19 @@ export function Page({ title, updated = true, children }: { title: string; updat
     };
   }, [title]);
   return (
-    <>
+    <div className="wallpaper legal-wall">
       <SkipLink />
-      <main
-        id="main"
-        tabIndex={-1}
-        style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px 8px' }}
-        className="prose-page"
-      >
-        <p>
-          <Link to="/">← Quiz Arena</Link>
-        </p>
-        <h1 style={{ marginBottom: 4 }}>{title}</h1>
-        {updated && <p style={{ color: 'var(--ink-muted)', marginTop: 0 }}>Last updated: {site.policiesUpdated}</p>}
-        {children}
-      </main>
+      <div style={{ maxWidth: 820, margin: '0 auto', padding: '20px 16px 8px' }}>
+        <Link to="/" className="chip legal-back">
+          <span aria-hidden="true">←</span> Quiz Arena
+        </Link>
+        <main id="main" tabIndex={-1} className="prose-page legal-card">
+          <h1 className="display">{title}</h1>
+          {updated && <p className="legal-updated">Last updated: {site.policiesUpdated}</p>}
+          {children}
+        </main>
+      </div>
       <Footer />
-    </>
+    </div>
   );
 }

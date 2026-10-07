@@ -366,3 +366,16 @@ export const ALL_LINES: { kind: CalloutKind; line: Line }[] = [
   ),
   ...Object.values(flagBySeverity).flatMap((lines) => lines.map((line) => ({ kind: 'flag' as const, line }))),
 ];
+
+const DEMO_NAMES = ['Riya', 'Dev', 'Asha', 'Kabir', 'Meera', 'Zoya', 'Arjun', 'Ira'];
+
+/** A random sample callout for the home page ("Roast someone"), with a made-up player name. */
+export function demoCallout(rand: () => number = Math.random): Callout {
+  const kinds: Exclude<CalloutKind, 'flag'>[] = ['wrong', 'none', 'fast', 'streak', 'wrong', 'none'];
+  const kind = kinds[Math.floor(rand() * kinds.length)]!;
+  const name = DEMO_NAMES[Math.floor(rand() * DEMO_NAMES.length)]!;
+  return make(kind, pick(BANK[kind], rand), `demo-${Math.floor(rand() * 1e9)}`, {
+    name,
+    streak: 3 + Math.floor(rand() * 4),
+  });
+}

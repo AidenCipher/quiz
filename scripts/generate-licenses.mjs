@@ -11,6 +11,15 @@ out.push(
 );
 out.push('=== Font: Inter (self-hosted) ===', '');
 out.push(readFileSync('apps/web/node_modules/@fontsource-variable/inter/LICENSE', 'utf8').trim(), '');
+out.push('=== Font: Bricolage Grotesque (self-hosted) ===', '');
+out.push(readFileSync('apps/web/node_modules/@fontsource-variable/bricolage-grotesque/LICENSE', 'utf8').trim(), '');
+out.push(
+  '=== GSAP (animation library) ===',
+  '',
+  'GSAP is used under GreenSock\'s Standard "no charge" licence: https://gsap.com/standard-license',
+  'It is free for this use and is bundled with the site (no CDN, no third-party request).',
+  '',
+);
 out.push('=== Production npm dependencies of the web app and worker ===', '');
 const seen = new Map();
 for (const dir of ['apps/web', 'apps/worker', 'packages/shared']) {

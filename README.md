@@ -36,6 +36,21 @@ You paste it into claude.ai, paste Claude's reply back, review every question (u
 subscription because nothing calls an API: Anthropic bills its API separately from Pro/Max plans, which is why there is no one-click version. Answer positions are shuffled,
 duplicates and malformed items are dropped with a reason, and timers follow the difficulty. The logic is in `packages/shared/src/generate.ts` with tests.
 
+## Look and feel
+
+Fresh, playful and a little 3D: a sky-to-sunset wallpaper, chunky ink-outlined buttons and cards, candy answer tiles and a mascot owl, **Hoot**, who reacts with moods.
+The home page has a real WebGL hero (Three.js, toon-shaded, loaded lazily): the owl follows your pointer, shapes squash when clicked, everything drags and spins. GSAP drives the
+page choreography (letters that dodge the cursor, magnetic buttons, scroll tilt, draggable stickers with inertia). Browsers without WebGL get a CSS-3D version, and
+`prefers-reduced-motion` turns the motion off. Every page is checked for sideways scrolling from 360 px phones to 1920 px projectors (`tests/e2e/tests/responsive.spec.ts`;
+set `SHOTS=<dir>` to also save screenshots for review). Fonts (Inter, Bricolage Grotesque) and libraries are bundled: no third-party requests.
+
+## Funny call-outs
+
+After each question the projector and phones get playful, kind roasts: a spotlight line for the room (a wrong answer, a no-show, the fastest finger, a streak or a fully right or wrong room),
+a private line on each phone, and a quip when someone is flagged for switching tabs. Lines allude to well-known memes and vines by name only (no clips, images or lyrics; sounds are
+synthesised) and the choice is seeded, so it is deterministic and never repeats a spotlight player twice in a row. Hosts can turn them off in **Game settings → Funny call-outs**.
+The line banks are in `packages/shared/src/callouts.ts` with tests.
+
 ## Host keyboard shortcuts
 
 | Key | Does |

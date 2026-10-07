@@ -70,6 +70,7 @@ export function SuspectRow({
   big?: boolean;
 }) {
   const sev = suspect.flag.severity;
+  const quip = 'quip' in suspect.flag ? suspect.flag.quip : undefined;
   const label =
     sev === 'removed'
       ? 'was escorted out'
@@ -97,6 +98,25 @@ export function SuspectRow({
       <div style={{ fontSize: big ? 34 : 26, fontWeight: 800 }}>
         {suspect.flag.nickname}
         <div style={{ fontSize: big ? 24 : 18, color: 'var(--on-stage-muted)', fontWeight: 600 }}>{label}</div>
+        {quip && (
+          <div
+            className="sticker s-flag"
+            data-testid="flag-quip"
+            style={{
+              marginTop: 8,
+              padding: '6px 12px',
+              fontSize: big ? 26 : 21,
+              fontWeight: 800,
+              borderRadius: 14,
+              maxWidth: 560,
+              ['--tilt' as string]: '-1.5deg',
+            }}
+          >
+            <span aria-hidden="true">{quip.emoji} </span>
+            {quip.text}
+            {quip.ref && <span className="ref"> {quip.ref}</span>}
+          </div>
+        )}
       </div>
     </div>
   );

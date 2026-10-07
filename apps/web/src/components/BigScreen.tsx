@@ -7,6 +7,8 @@ import { flagCounts, type PhaseMsg } from '../lib/reduce';
 import { sfx } from '../lib/sound';
 import { useGame } from '../lib/store';
 import { Avatar } from './Avatar';
+import { Hoot } from './Hoot';
+import { CalloutFx, CalloutSticker } from './CalloutSticker';
 import { EyeBadge, SuspectRow } from './Detective';
 
 /* ------------------------------------------------------------------ */
@@ -263,7 +265,12 @@ function Lobby({ phase, roster }: { phase: Extract<PhaseMsg, { t: 'lobby' }>; ro
           {phase.locked && <span style={{ fontSize: 32, color: 'var(--warn)', fontWeight: 800 }}>🔒 locked</span>}
         </div>
         {roster.length === 0 && (
-          <div style={{ fontSize: 44, color: 'var(--on-stage-muted)' }}>Waiting for players to scan the code…</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+            <div className="float">
+              <Hoot mood="sleepy" size={220} />
+            </div>
+            <div style={{ fontSize: 44, color: 'var(--on-stage-muted)' }}>Waiting for players to scan the code…</div>
+          </div>
         )}
         <div
           style={{
@@ -367,6 +374,39 @@ function Question({ phase }: { phase: Extract<PhaseMsg, { t: 'question' }> }) {
   );
 }
 
+/** The funny spotlight line, slapped on the projector a beat after the answer is revealed. */
+function RevealCallout({
+  callout,
+  lowered,
+}: {
+  callout: NonNullable<Extract<PhaseMsg, { t: 'reveal' }>['callout']>;
+  lowered: boolean;
+}) {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setOn(true);
+      if (callout.fx === 'fire') sfx.fire();
+      else if (callout.fx === 'tumbleweed' || callout.fx === 'zzz') sfx.tumble();
+      else if (callout.fx === 'boom') sfx.boom();
+      else sfx.pop();
+    }, 900);
+    return () => clearTimeout(id);
+  }, [callout.id]);
+  if (!on) return null;
+  return (
+    <>
+      <CalloutFx callout={callout} big />
+      <div
+        style={{ position: 'absolute', right: 70, bottom: lowered ? 56 : 470, zIndex: 16, pointerEvents: 'none' }}
+        data-testid="stage-callout"
+      >
+        <CalloutSticker callout={callout} size="stage" tilt={-2.5} />
+      </div>
+    </>
+  );
+}
+
 function Reveal({
   phase,
   isHost,
@@ -447,6 +487,7 @@ function Reveal({
           reveal={{ correctOption: phase.correctOption, counts: phase.counts }}
         />
       )}
+      {phase.callout && <RevealCallout key={phase.callout.id} callout={phase.callout} lowered={isText} />}
       {phase.voided.length > 0 && (
         <div
           className="slide-up"
@@ -468,6 +509,8 @@ function Reveal({
     </div>
   );
 }
+
+const PODIUM_BG = ['var(--sun)', '#e4dcff', '#ffc9a8'];
 
 function Leaderboard({ rows, isLast }: { rows: BoardRow[]; isLast: boolean }) {
   const [settled, setSettled] = useState(false);
@@ -499,12 +542,17 @@ function Leaderboard({ rows, isLast }: { rows: BoardRow[]; isLast: boolean }) {
                 alignItems: 'center',
                 gap: 28,
                 padding: '0 32px',
-                background: 'var(--stage-2)',
-                borderRadius: 20,
+                background: PODIUM_BG[r.rank - 1] ?? 'var(--stage-2)',
+                color: r.rank <= 3 ? 'var(--ink)' : undefined,
+                border: r.rank <= 3 ? '4px solid var(--ink)' : '2px solid #3b2a73',
+                boxShadow: r.rank <= 3 ? '0 8px 0 #0a0518' : undefined,
+                borderRadius: 24,
                 fontSize: 52,
               }}
             >
-              <span style={{ width: 70, fontWeight: 800 }}>{r.rank}</span>
+              <span style={{ width: 70, fontWeight: 800 }}>
+                {r.rank <= 3 ? <span aria-label={`rank ${r.rank}`}>{['🥇', '🥈', '🥉'][r.rank - 1]}</span> : r.rank}
+              </span>
               <div style={{ position: 'relative' }}>
                 <Avatar code={r.avatar} size={84} rounded={20} />
                 <EyeBadge count={r.flags} />

@@ -69,8 +69,18 @@ h1,
 h2,
 h3 {
   font-family: var(--display);
+  font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.08;
+}
+h1 {
+  font-size: clamp(28px, 5vw, 44px);
+}
+h2 {
+  font-size: clamp(20px, 3vw, 28px);
+}
+h3 {
+  font-size: 18px;
 }
 button,
 input,
@@ -162,6 +172,9 @@ button {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
+}
+.btn-ghost.muted-on-dark {
+  color: var(--on-stage-muted);
 }
 .btn-ghost:hover:not(:disabled) {
   transform: none;
@@ -1020,4 +1033,149 @@ button.tile:active:not(:disabled) {
   .emoji-rain {
     display: none;
   }
+}
+
+/* ---- callout effects ---- */
+.fx-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 30;
+}
+html.fx-shake #root {
+  animation: shake-x 520ms ease-in-out both;
+}
+.hero-3d {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: 540px;
+  margin-inline: auto;
+}
+.hero-3d canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-layer {
+    display: none;
+  }
+  html.fx-shake #root {
+    animation: none;
+  }
+}
+
+/* ---- home: nothing is hidden unless the animation layer is about to reveal it ---- */
+.fx-wait .reveal,
+.fx-wait [data-ch],
+.fx-wait .hero-3d,
+.fx-wait .iso-wrap {
+  opacity: 0;
+}
+.step-card {
+  will-change: transform;
+}
+.sticker-drag:active {
+  cursor: grabbing;
+}
+
+/* ---- builder: question list beside the editor on wide screens, stacked on phones ---- */
+.b-nav {
+  width: 300px;
+  border-right: 1px solid var(--line);
+}
+.b-main {
+  min-width: 0;
+}
+@media (max-width: 800px) {
+  .b-nav {
+    width: 100%;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .b-main {
+    flex-basis: 100%;
+  }
+}
+
+/* ---- legal pages: paper card on the wallpaper ---- */
+.legal-wall {
+  min-height: 100dvh;
+}
+.legal-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 14px;
+  color: var(--ink);
+  font-weight: 800;
+  text-decoration: none;
+  background: #fff;
+  border: 2.5px solid var(--ink);
+  box-shadow: 0 4px 0 var(--ink);
+  padding: 6px 14px;
+  border-radius: 999px;
+}
+.legal-back:hover {
+  transform: translateY(-1px) rotate(-1deg);
+}
+.legal-card {
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  border-radius: 28px;
+  box-shadow: 0 10px 0 var(--ink);
+  padding: clamp(18px, 4vw, 40px);
+  overflow-wrap: anywhere;
+}
+.legal-card h1 {
+  margin: 0 0 4px;
+  font-size: clamp(30px, 6vw, 52px);
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.legal-card h2 {
+  font-family: var(--display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.legal-updated {
+  display: inline-block;
+  margin: 8px 0 8px;
+  padding: 2px 12px;
+  border-radius: 999px;
+  background: var(--lilac);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 14px;
+}
+.legal-card table {
+  display: block;
+  overflow-x: auto;
+}
+.legal-wall footer,
+.legal-wall footer a {
+  color: var(--ink) !important;
+  font-weight: 700;
+}
+
+/* ---- host dashboard / results on the wallpaper ---- */
+.host-wall {
+  min-height: 100dvh;
+}
+.host-wall .host-sub {
+  color: var(--ink);
+  opacity: 0.85;
+}
+/* small icon buttons in the question list stay comfortably tappable (WCAG 2.2 target size) */
+.b-nav .btn-ghost {
+  min-width: 32px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }

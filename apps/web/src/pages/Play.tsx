@@ -4,6 +4,9 @@ import type { FlagInfo } from '@quiz/shared/protocol';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Avatar, AvatarBuilder } from '../components/Avatar';
+import { LOCK_IN_QUIPS } from '@quiz/shared/callouts';
+import { Hoot } from '../components/Hoot';
+import { CalloutSticker } from '../components/CalloutSticker';
 import { Footer, SkipLink } from '../components/Chrome';
 import { ConfirmDialog } from '../components/Dialogs';
 import { api } from '../lib/api';
@@ -18,6 +21,7 @@ import {
   saveProfile,
   type PlayerIdentity,
 } from '../lib/socket';
+import { sfx } from '../lib/sound';
 import { useGame } from '../lib/store';
 import { useDialog } from '../lib/useDialog';
 import { acquireWakeLock, releaseWakeLock } from '../lib/wakelock';
@@ -317,6 +321,11 @@ function Game({ pin, socket }: { pin: string; socket: React.RefObject<GameSocket
             }}
           >
             {n.text}
+            {n.quip && (
+              <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }} data-testid="flag-quip">
+                {n.quip.emoji} {n.quip.text}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -409,8 +418,13 @@ const Centered = ({ children }: { children: React.ReactNode }) => (
 function Waiting({ nick, avatar, pin }: { nick: string; avatar: string; pin: string }) {
   return (
     <Centered>
-      <div className="pop-in">
-        <Avatar code={avatar || DEFAULT_AVATAR} size={140} rounded={36} label={`${nick}'s avatar`} />
+      <div style={{ position: 'relative' }}>
+        <div className="pop-spring">
+          <Avatar code={avatar || DEFAULT_AVATAR} size={140} rounded={36} label={`${nick}'s avatar`} />
+        </div>
+        <div className="float" style={{ position: 'absolute', right: -70, bottom: -14 }}>
+          <Hoot mood="party" size={72} />
+        </div>
       </div>
       <div style={{ fontSize: 32, fontWeight: 800 }}>{nick}</div>
       <div style={{ fontSize: 22, fontWeight: 600 }}>You're in! 🎉</div>
@@ -604,15 +618,22 @@ const Sending = () => (
   </div>
 );
 
-const LockedIn = ({ detail }: { detail?: string }) => (
-  <div
-    role="status"
-    className="pop-in"
-    style={{ textAlign: 'center', fontWeight: 800, fontSize: 20, color: '#86efac' }}
-  >
-    ✓ Locked in{detail ? <div style={{ fontSize: 15, fontWeight: 600 }}>{detail}</div> : null}
-  </div>
-);
+const LockedIn = ({ detail }: { detail?: string }) => {
+  const fun = useGame((s) => (s.phase?.t === 'question' ? s.phase.funCallouts !== false : true));
+  const idx = useGame((s) => (s.phase?.t === 'question' ? s.phase.index : 0));
+  const quip = LOCK_IN_QUIPS[(idx * 7 + 3) % LOCK_IN_QUIPS.length];
+  return (
+    <div
+      role="status"
+      className="pop-in"
+      style={{ textAlign: 'center', fontWeight: 800, fontSize: 20, color: '#86efac' }}
+    >
+      ✓ Locked in
+      {detail ? <div style={{ fontSize: 15, fontWeight: 600 }}>{detail}</div> : null}
+      {fun && !detail && <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-stage-muted)' }}>{quip}</div>}
+    </div>
+  );
+};
 
 function RevealView({
   phase,
@@ -620,6 +641,18 @@ function RevealView({
   phase: Extract<NonNullable<ReturnType<typeof useGame.getState>['phase']>, { t: 'reveal' }>;
 }) {
   const you = phase.you;
+  const calloutId = you?.callout?.id;
+  const calloutFx = you?.callout?.fx;
+  useEffect(() => {
+    if (!calloutId) return;
+    const id = setTimeout(() => {
+      if (calloutFx === 'boom') sfx.boom();
+      else if (calloutFx === 'fire') sfx.fire();
+      else if (calloutFx === 'tumbleweed' || calloutFx === 'zzz') sfx.tumble();
+      else sfx.pop();
+    }, 500);
+    return () => clearTimeout(id);
+  }, [calloutId]);
   const verdict = !you?.answered ? 'none' : you.voided ? 'void' : you.correct ? 'right' : 'wrong';
   const style = {
     right: { bg: '#052e16', fg: '#86efac', title: 'Correct!' },
@@ -660,6 +693,11 @@ function RevealView({
       )}
       {phase.qtype === 'text' && verdict !== 'right' && phase.accepted.length > 0 && (
         <div className="muted-on-dark">Answer: {phase.accepted[0]}</div>
+      )}
+      {you?.callout && (
+        <div style={{ marginTop: 8 }} data-testid="phone-callout">
+          <CalloutSticker callout={you.callout} size="phone" tilt={-2} />
+        </div>
       )}
       {you && (
         <div style={{ marginTop: 12, fontSize: 22 }}>

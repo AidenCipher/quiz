@@ -2,6 +2,7 @@ import { defaultSettings, newQuestion } from '@quiz/shared/quiz';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Footer, SkipLink } from '../components/Chrome';
+import { Hoot } from '../components/Hoot';
 import { ConfirmDialog, HostConsentDialog } from '../components/Dialogs';
 import { api, type Me } from '../lib/api';
 
@@ -19,7 +20,7 @@ export default function HostHome() {
 function SignIn({ me, onDone }: { me: Me; onDone: () => void }) {
   const [name, setName] = useState('');
   return (
-    <>
+    <div className="wallpaper host-wall">
       <SkipLink />
       <main id="main" tabIndex={-1} style={{ display: 'grid', placeItems: 'center', minHeight: '80dvh', padding: 20 }}>
         <div className="card" style={{ padding: 28, maxWidth: 420, width: '100%' }}>
@@ -77,7 +78,7 @@ function SignIn({ me, onDone }: { me: Me; onDone: () => void }) {
         </div>
       </main>
       <Footer />
-    </>
+    </div>
   );
 }
 
@@ -124,12 +125,16 @@ function Dashboard({ name, onSignOut, onGone }: { name: string; onSignOut: () =>
   };
 
   return (
-    <>
+    <div className="wallpaper host-wall">
       <SkipLink />
       <main id="main" tabIndex={-1} style={{ maxWidth: 880, margin: '0 auto', padding: '24px 16px' }}>
         <header style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
-          <h1 style={{ margin: 0, flex: 1 }}>My quizzes</h1>
-          <span style={{ color: 'var(--ink-muted)' }}>{name}</span>
+          <h1 style={{ margin: 0, flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Hoot mood="happy" size={44} /> My quizzes
+          </h1>
+          <span className="host-sub" style={{ fontWeight: 700 }}>
+            {name}
+          </span>
           <button className="btn" onClick={onSignOut}>
             Sign out
           </button>
@@ -188,9 +193,7 @@ function Dashboard({ name, onSignOut, onGone }: { name: string; onSignOut: () =>
 
         <h2 style={{ marginTop: 40 }}>Past games</h2>
         {results.length === 0 ? (
-          <p style={{ color: 'var(--ink-muted)' }}>
-            Finished games appear here for 30 days, then are deleted automatically.
-          </p>
+          <p className="host-sub">Finished games appear here for 30 days, then are deleted automatically.</p>
         ) : (
           <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 8 }}>
             {results.map((r) => (
@@ -278,6 +281,6 @@ function Dashboard({ name, onSignOut, onGone }: { name: string; onSignOut: () =>
           be undone. Download your data first if you want a copy.
         </ConfirmDialog>
       )}
-    </>
+    </div>
   );
 }

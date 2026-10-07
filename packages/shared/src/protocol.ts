@@ -168,6 +168,7 @@ export type ServerMsg =
       answered?: boolean;
       myOption?: number;
       allowChange?: boolean;
+      funCallouts?: boolean;
     })
   | (Base & { t: 'progress'; index: number; answered: number; total: number })
   | (Base & { t: 'answerAck'; q: number; ok: boolean; reason?: string })
