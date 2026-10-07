@@ -29,6 +29,20 @@ Simulate players (optionally with tab-switchers) against a live game:
 node tests/load/bots.mjs <PIN> 30 localhost:8787 --cheat=3
 ```
 
+## Host keyboard shortcuts
+
+| Key | Does |
+| --- | --- |
+| Space | The main action: start, skip countdown, end question, next, full results |
+| P | Pause / resume the current question |
+| K | Moderation drawer: flags, rename, kick, lock lobby |
+| D | Debug panel: connected phones, messages per second, each phone's round trip |
+| F | Fullscreen |
+| M | Mute |
+| Esc | Close the open drawer or dialog |
+
+Shortcuts never fire while a dialog, drawer or form field has focus, so they cannot be triggered by accident.
+
 ## Layout
 
 ```
