@@ -82,3 +82,8 @@ code and tests, lists what does not apply (payments, email, reviews) and what th
 drafted from what the code does; they are not legal advice, so have them reviewed before a public launch.
 
 Regenerate the third-party licence notices after changing dependencies: `node scripts/generate-licenses.mjs`.
+
+## License
+
+[MIT](LICENSE) © 2026 Abhinav P Rotti. Third-party licences (Inter font under the SIL OFL, and the npm dependencies) are listed in
+`apps/web/public/third-party-notices.txt`. Hosts' own quizzes and uploaded images belong to them.

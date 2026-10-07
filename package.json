@@ -21,5 +21,6 @@
     "typescript-eslint": "^8.71.0"
   },
   "type": "module",
-  "packageManager": "pnpm@12.9.1"
+  "packageManager": "pnpm@12.9.1",
+  "license": "MIT"
 }

@@ -38,5 +38,5 @@ Scope: Quiz Arena as implemented in this repository. Updated 6 October 2026. Thi
 
 1. Fill in the four business-detail variables (name, postal address, country, contact email) and confirm the jurisdiction wording.
 2. Have a lawyer review the policies for the markets you serve (GDPR/UK GDPR, India's DPDP Act, COPPA/FERPA if US schools use it). The "under 16" threshold in the host consent text is a conservative default.
-3. Decide a licence for the source code (none is declared yet).
+3. The source code is MIT-licensed (`LICENSE`). The Inter font keeps its own licence (OFL) and hosts keep the rights to their own quizzes and images.
 4. If you add Google sign-in, complete the OAuth consent screen (app name, privacy-policy link, scopes `openid profile`).

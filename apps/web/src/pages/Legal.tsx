@@ -396,8 +396,9 @@ export function Credits() {
       </p>
       <h2>Software</h2>
       <p>
-        {site.name} is built with open-source software under permissive licences (MIT, ISC and OFL). The complete list
-        with licence names is in the <a href="/third-party-notices.txt">third-party notices</a>.
+        {site.name}'s own source code is released under the MIT licence. It is built with open-source software under
+        permissive licences (MIT, ISC and OFL). The complete list with licence names is in the{' '}
+        <a href="/third-party-notices.txt">third-party notices</a>.
       </p>
     </Page>
   );
