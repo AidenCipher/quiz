@@ -57,6 +57,8 @@ const stats = {
   errors: [],
   acks: 0,
   ackRejected: 0,
+  rejections: [],
+  missedQuestion: 0,
   answersSent: 0,
   revealLatency: [],
   ackLatency: [],
@@ -109,6 +111,7 @@ function makeBot(i) {
       stats.errors.push(`${i}: ${m.code}`);
       if (!bot.ready) stats.joinFailures++;
     } else if (m.t === 'question') {
+      bot.qIndex = m.index;
       bot.qtype = m.qtype;
       bot.optionCount = m.optionCount;
       bot.onQuestion?.(m);
@@ -116,7 +119,12 @@ function makeBot(i) {
       if (m.ok) {
         stats.acks++;
         stats.ackLatency.push(performance.now() - (current.sentAt.get(i) ?? performance.now()));
-      } else stats.ackRejected++;
+      } else {
+        stats.ackRejected++;
+        stats.rejections.push(
+          `q${m.q + 1} bot ${i + 1}: ${m.reason} (sent ${Math.round(performance.now() - (current.sentAt.get(i) ?? performance.now()))} ms ago)`,
+        );
+      }
     } else if (m.t === 'reveal') {
       current.revealAt.set(i, performance.now());
     }
@@ -133,7 +141,7 @@ function makeBot(i) {
 const burstStart = performance.now();
 for (let i = 0; i < N; i++) {
   bots.push(makeBot(i));
-  await sleep((28_000 / N) * Math.random() * 2); // average 28 s spread, random arrival
+  await sleep((25_000 / N) * Math.random() * 2); // average 25 s spread, random arrival
 }
 for (let t = 0; t < 400 && bots.filter((b) => b.ready).length < N; t++) await sleep(50);
 const joinedAll = (performance.now() - burstStart) / 1000;
@@ -155,7 +163,12 @@ for (let q = 0; q < Q; q++) {
   await Promise.all(
     bots.map(async (b) => {
       await sleep(Math.random() * 1000);
-      if (b.closed) return;
+      // A phone only answers once it has actually received this question (slow links get it late).
+      for (let w = 0; w < 100 && b.qIndex !== q && !b.closed; w++) await sleep(50);
+      if (b.closed || b.qIndex !== q) {
+        stats.missedQuestion++;
+        return;
+      }
       const opt = b.qtype === 'tf' ? Math.floor(Math.random() * 2) : Math.floor(Math.random() * (b.optionCount || 4));
       current.sentAt.set(b.i, performance.now());
       b.ws.send(JSON.stringify({ t: 'answer', q, option: opt }));
@@ -166,7 +179,7 @@ for (let q = 0; q < Q; q++) {
   );
   const sendSpan = performance.now() - sendStart;
   await waitHost((m) => m.t === 'reveal' && m.index === q, 15000);
-  await sleep(300); // let every reveal arrive
+  for (let w = 0; w < 60 && current.revealAt.size < N; w++) await sleep(50); // let every reveal arrive (up to 3 s)
   const lat = [...current.revealAt.values()].map((t) => t - current.lastAnswerAt).filter((x) => x > -50);
   const worst = Math.max(...lat, 0);
   stats.revealLatency.push(...lat.map((x) => Math.max(0, x)));
@@ -201,6 +214,7 @@ const checks = [
     `reveal latency p95 < 500 ms (p50 ${Math.round(pct(stats.revealLatency, 50))}, p95 ${Math.round(pct(stats.revealLatency, 95))}, max ${Math.round(Math.max(...stats.revealLatency))} ms)`,
     pct(stats.revealLatency, 95) < 500,
   ],
+  [`every phone received every question before answering (${stats.missedQuestion} missed)`, stats.missedQuestion === 0],
   [`results saved for all players`, podium.results.players.length === N],
 ];
 console.log('\n--- results ---');
@@ -212,6 +226,7 @@ console.log(
   `traffic       ${stats.messagesOut} messages sent by players, ${stats.messagesIn} received (${(stats.bytesIn / 1024 / 1024).toFixed(1)} MiB)`,
 );
 console.table(stats.perQuestion);
+if (stats.rejections.length) console.log('rejected answers:\n  ' + stats.rejections.join('\n  '));
 for (const [name, ok] of checks) console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}`);
 hostSend({ t: 'end' });
 await sleep(300);
