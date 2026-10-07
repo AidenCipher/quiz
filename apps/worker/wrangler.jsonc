@@ -17,7 +17,7 @@
     {
       "binding": "DB",
       "database_name": "quiz-arena",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "85cc0177-0b7e-49af-a32c-d160ed1117b2",
       "migrations_dir": "migrations"
     }
   ],
@@ -28,15 +28,19 @@
     "staging": {
       "name": "quiz-arena-staging",
       "durable_objects": { "bindings": [{ "name": "GAME_ROOM", "class_name": "GameRoom" }] },
+      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }],
+      "observability": { "enabled": true },
+      // DEV_LOGIN is deliberately absent (= off). Switch it on only while load testing:
+      //   npx wrangler secret put DEV_LOGIN --env staging   (value 1), and delete it afterwards.
+      "vars": {},
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "quiz-arena-staging",
-          "database_id": "00000000-0000-0000-0000-000000000000",
+          "database_id": "a7339036-7458-45ac-bb3e-a6d70c03637e",
           "migrations_dir": "migrations"
         }
-      ],
-      "vars": { "DEV_LOGIN": "0" }
+      ]
     }
   }
 }
