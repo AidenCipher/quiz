@@ -4,7 +4,6 @@ import {
   BackSide,
   CanvasTexture,
   ConeGeometry,
-  CylinderGeometry,
   DataTexture,
   DirectionalLight,
   ExtrudeGeometry,

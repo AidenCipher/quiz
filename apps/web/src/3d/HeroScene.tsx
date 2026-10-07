@@ -47,7 +47,6 @@ export default function HeroScene({
       handle?.dispose();
       if (controls) controls.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (fallback) return <IsoStack />;
