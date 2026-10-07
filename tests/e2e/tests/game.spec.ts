@@ -142,3 +142,21 @@ test('joining: wrong PIN, nickname rules, locked lobby, kick', async ({ browser 
 
   await Promise.all([hostCtx, stranger, rude, a.context, b.context, late].map((c) => c.close()));
 });
+
+test('the host debug panel (D) shows live connections and each phone round trip', async ({ browser }) => {
+  const { page: host, pin, context: hostCtx } = await startGame(browser);
+  const a = await joinPlayer(browser, pin, 'Asha');
+  const b = await joinPlayer(browser, pin, 'Bilal');
+  await expectLobbyCount(host, 2);
+  await host.keyboard.press('d');
+  const panel = host.getByRole('complementary', { name: 'Debug' });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText('2 / 2')).toBeVisible();
+  await expect(panel.getByRole('cell', { name: 'Asha' })).toBeVisible();
+  await expect(panel.getByRole('cell', { name: 'Bilal' })).toBeVisible();
+  await b.page.close(); // a phone going away shows up
+  await expect(panel.getByText('1 / 2')).toBeVisible();
+  await host.keyboard.press('Escape');
+  await expect(panel).toBeHidden();
+  await Promise.all([hostCtx, a.context, b.context].map((c) => c.close()));
+});

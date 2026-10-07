@@ -37,6 +37,8 @@ export interface GameView {
   /** the player erased themselves from the game */
   erased: boolean;
   ack: { q: number; ok: boolean; reason?: string } | null;
+  /** latest host-only debug snapshot */
+  debug: Extract<ServerMsg, { t: 'debug' }> | null;
   /** nicknames of removed players by id (for the big screen escort). */
   removedIds: Record<string, string>;
 }
@@ -62,6 +64,7 @@ export const initialView = (): GameView => ({
   erased: false,
   ack: null,
   removedIds: {},
+  debug: null,
 });
 
 const upsertFlag = (flags: FlagInfo[], f: FlagInfo): FlagInfo[] => {
@@ -164,6 +167,8 @@ export function reduce(v: GameView, msg: ServerMsg, now = Date.now()): GameView 
       return { ...v, erased: true, me: null };
     case 'error':
       return { ...v, error: { code: msg.code, message: msg.message } };
+    case 'debug':
+      return { ...v, debug: msg };
     case 'pong':
       return v;
   }

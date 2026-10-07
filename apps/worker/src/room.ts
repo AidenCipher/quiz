@@ -136,6 +136,11 @@ export class GameRoom extends DurableObject<Env> {
   private pingAt = new Map<string, number>();
   private maxGap = new Map<string, number>();
   private dropped = 0;
+  // Host debug panel: live, in-memory only (nothing here is stored).
+  private msgSeconds = new Map<number, number>();
+  private rtts = new Map<string, number>();
+  private lastAnswerAt = 0;
+  private lastClose: { index: number; ms: number; by: 'all-answered' | 'timer' | 'host' } | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -298,6 +303,13 @@ export class GameRoom extends DurableObject<Env> {
 
     const att = (ws.deserializeAttachment() as Attachment | null) ?? { role: 'player', playerId: null };
     const now = Date.now();
+    this.countMessage(now);
+
+    if (msg.t === 'debug') {
+      if (att.role === 'host') this.send(ws, this.debugSnapshot(s, now));
+      else this.send(ws, { t: 'error', code: 'forbidden', message: 'Host only' });
+      return;
+    }
 
     if (HOST_ONLY.has(msg.t)) {
       if (att.role !== 'host') {
@@ -312,7 +324,7 @@ export class GameRoom extends DurableObject<Env> {
         if (p && !p.removed) {
           if (msg.t === 'answer') await this.handleAnswer(s, p, msg, now);
           else if (msg.t === 'presence') await this.handlePresence(s, p, msg, now);
-          else if (msg.t === 'ping') this.handlePing(s, p, ws, now);
+          else if (msg.t === 'ping') this.handlePing(s, p, ws, now, msg.rtt);
           else if (msg.t === 'leave') await this.eraseSelf(s, p, ws);
         }
       }
@@ -364,7 +376,7 @@ export class GameRoom extends DurableObject<Env> {
 
     if (s.phase === 'getready' && now >= s.getReadyEndsAt) await this.openQuestion(s, now);
     else if (s.phase === 'question' && s.pausedAt === null && now >= s.endsAt) {
-      await this.closeQuestion(s, now);
+      await this.closeQuestion(s, now, false, 'timer');
     }
 
     for (const p of Object.values(s.players)) {
@@ -556,13 +568,15 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     await this.saveAnswer(s.qIndex, p.id, rec, stateChanged);
+    this.lastAnswerAt = now;
     ack(true);
     this.broadcastProgress();
     await this.maybeCloseEarly(s);
   }
 
-  private handlePing(s: GameState, p: PlayerRec, ws: WebSocket, now: number): void {
+  private handlePing(s: GameState, p: PlayerRec, ws: WebSocket, now: number, rtt?: number): void {
     this.send(ws, { t: 'pong' } as ServerMsg);
+    if (rtt !== undefined) this.rtts.set(p.id, rtt);
     if (s.phase !== 'question' || s.pausedAt !== null) return;
     const last = this.pingAt.get(p.id);
     if (last !== undefined) {
@@ -938,7 +952,12 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
-  private async closeQuestion(s: GameState, now: number, silent = false): Promise<void> {
+  private async closeQuestion(
+    s: GameState,
+    now: number,
+    silent = false,
+    by: 'all-answered' | 'timer' | 'host' = 'host',
+  ): Promise<void> {
     if (s.phase !== 'question') return;
     if (s.pausedAt !== null) {
       s.pausedAt = null;
@@ -961,6 +980,12 @@ export class GameRoom extends DurableObject<Env> {
     s.phase = 'reveal';
     s.endsAt = Math.min(s.endsAt, now);
     if (!silent) this.broadcastPhase();
+    // Server-side share of "last answer → reveal": from the trigger to the reveal being handed to the sockets.
+    this.lastClose = {
+      index: s.qIndex,
+      ms: Math.max(0, Date.now() - (by === 'all-answered' ? this.lastAnswerAt : now)),
+      by,
+    };
     for (const p of this.activePlayers(s)) this.flushWarnings(s, p);
   }
 
@@ -992,7 +1017,7 @@ export class GameRoom extends DurableObject<Env> {
     if (!online.size || !connected.length) return;
     const answers = s.answers[s.qIndex] ?? {};
     if (connected.every((p) => answers[p.id])) {
-      await this.closeQuestion(s, Date.now());
+      await this.closeQuestion(s, Date.now(), false, 'all-answered');
       await this.save();
       await this.scheduleAlarm();
     }
@@ -1426,6 +1451,38 @@ export class GameRoom extends DurableObject<Env> {
     if (b[0] < 1) return false;
     b[0] -= 1;
     return true;
+  }
+
+  private countMessage(now: number): void {
+    const sec = Math.floor(now / 1000);
+    this.msgSeconds.set(sec, (this.msgSeconds.get(sec) ?? 0) + 1);
+    if (this.msgSeconds.size > 20) for (const k of this.msgSeconds.keys()) if (k < sec - 10) this.msgSeconds.delete(k);
+  }
+
+  private debugSnapshot(s: GameState, now: number): ServerMsg {
+    const sec = Math.floor(now / 1000);
+    let recent = 0;
+    for (let k = sec - 5; k < sec; k++) recent += this.msgSeconds.get(k) ?? 0; // last 5 whole seconds
+    const online = this.connectedIds();
+    return {
+      serverTime: now,
+      t: 'debug',
+      connected: online.size,
+      players: this.activePlayers(s).length,
+      messagesPerSec: Math.round((recent / 5) * 10) / 10,
+      malformed: this.dropped,
+      lastClose: this.lastClose,
+      clients: this.activePlayers(s).map((p) => {
+        const ping = this.pingAt.get(p.id);
+        return {
+          id: p.id,
+          nickname: p.nickname,
+          connected: online.has(p.id),
+          rttMs: this.rtts.get(p.id) ?? null,
+          lastPingAgoMs: ping === undefined ? null : now - ping,
+        };
+      }),
+    } as ServerMsg;
   }
 
   private drop(): void {

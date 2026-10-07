@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { BigScreen, Stage } from '../components/BigScreen';
 import { ConfirmDialog } from '../components/Dialogs';
+import { DebugPanel } from '../components/DebugPanel';
 import { ModerationDrawer, PendingRemovals } from '../components/Moderation';
 import { api } from '../lib/api';
 import { resultsToCsv, download } from '../lib/csv';
@@ -22,6 +23,7 @@ export default function Live() {
   const error = useGame((s) => s.error);
   const [barVisible, setBarVisible] = useState(true);
   const [moderation, setModeration] = useState(false);
+  const [debugOpen, setDebugOpen] = useState(false);
   const [muted, setMutedState] = useState(isMuted());
   const [table, setTable] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
@@ -97,6 +99,7 @@ export default function Live() {
       } else if (e.key === 'f' || e.key === 'F') toggleFullscreen();
       else if (e.key === 'm' || e.key === 'M') toggleMute();
       else if (e.key === 'k' || e.key === 'K') setModeration((m) => !m);
+      else if (e.key === 'd' || e.key === 'D') setDebugOpen((d) => !d);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -163,6 +166,7 @@ export default function Live() {
         </ConfirmDialog>
       )}
       <PendingRemovals send={send} />
+      {debugOpen && <DebugPanel send={send} onClose={() => setDebugOpen(false)} />}
       {moderation && <ModerationDrawer send={send} onClose={() => setModeration(false)} />}
       {status !== 'open' && status !== 'idle' && (
         <div

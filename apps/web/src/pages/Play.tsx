@@ -762,7 +762,7 @@ function usePresence(socket: React.RefObject<GameSocket | null>, questionOpen: b
   // Heartbeat: a gap in pings while a question is open is the backup signal.
   useEffect(() => {
     if (!questionOpen) return;
-    const id = setInterval(() => socket.current?.send({ t: 'ping' }), HEARTBEAT_MS);
+    const id = setInterval(() => socket.current?.send({ t: 'ping', rtt: socket.current.rtt }), HEARTBEAT_MS);
     return () => clearInterval(id);
   }, [questionOpen, socket]);
 }

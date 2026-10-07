@@ -419,6 +419,44 @@ describe('anti-cheat', () => {
   });
 });
 
+describe('host debug snapshot', () => {
+  it('shows connections, message rate, per-phone round trip, and how the last question closed; host only', async () => {
+    const { stub, pin } = await makeGame({ questions: [mcq('Q1', 1, 30)] });
+    const host = await openHost(stub, pin);
+    const a = await join(stub, 'Ann');
+    const b = await join(stub, 'Bob');
+    a.send({ t: 'ping', rtt: 120 });
+    await a.waitFor((m) => m.t === 'pong');
+
+    host.send({ t: 'debug' });
+    const first = await host.waitFor((m) => m.t === 'debug');
+    expect(first).toMatchObject({ connected: 2, players: 2, lastClose: null });
+    expect(first.messagesPerSec).toBeGreaterThanOrEqual(0);
+    expect(first.clients.find((c: Msg) => c.nickname === 'Ann').rttMs).toBe(120);
+    expect(first.clients.find((c: Msg) => c.nickname === 'Bob').rttMs).toBeNull();
+
+    host.send({ t: 'start' });
+    await host.waitFor((m) => m.t === 'getready');
+    host.send({ t: 'skip' });
+    await a.waitFor((m) => m.t === 'question');
+    a.send({ t: 'answer', q: 0, option: 1 });
+    b.send({ t: 'answer', q: 0, option: 1 });
+    await host.waitFor((m) => m.t === 'reveal');
+    const before = host.msgs.length;
+    host.send({ t: 'debug' });
+    const second = await host.waitFor((m) => m.t === 'debug' && host.msgs.indexOf(m) >= before);
+    expect(second.lastClose).toMatchObject({ index: 0, by: 'all-answered' });
+    expect(second.lastClose.ms).toBeGreaterThanOrEqual(0);
+    expect(second.lastClose.ms).toBeLessThan(1000);
+
+    a.send({ t: 'debug' });
+    expect((await a.waitFor((m) => m.t === 'error')).code).toBe('forbidden');
+    const screen = await openHost(stub, pin, 'screen');
+    screen.send({ t: 'debug' });
+    expect((await screen.waitFor((m) => m.t === 'error')).code).toBe('forbidden');
+  });
+});
+
 describe('message ordering', () => {
   it('an answer sent right behind a rejoin is processed after the join, not dropped', async () => {
     const { stub, pin } = await makeGame({ questions: [mcq('Q1', 1, 30)] });

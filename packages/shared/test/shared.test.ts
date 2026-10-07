@@ -178,6 +178,12 @@ describe('avatar, nickname, schemas', () => {
     expect(QuestionSchema.safeParse({ ...q, imageAlt: 'A map of India' }).success).toBe(true);
     expect(QuestionSchema.safeParse({ ...q, image: null }).success).toBe(true);
   });
+  it('accepts a ping with a phone-reported round trip, rejects nonsense', () => {
+    expect(ClientMsgSchema.safeParse({ t: 'ping', rtt: 123 }).success).toBe(true);
+    expect(ClientMsgSchema.safeParse({ t: 'ping' }).success).toBe(true);
+    expect(ClientMsgSchema.safeParse({ t: 'ping', rtt: -1 }).success).toBe(false);
+    expect(ClientMsgSchema.safeParse({ t: 'debug' }).success).toBe(true);
+  });
   it('accepts a leave (erasure) message', () => {
     expect(ClientMsgSchema.safeParse({ t: 'leave' }).success).toBe(true);
   });

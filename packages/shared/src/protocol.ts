@@ -25,7 +25,8 @@ const presence = z.object({
   state: z.enum(['hidden', 'visible', 'blur', 'focus', 'left']),
   awayMs: z.number().min(0).max(3_600_000).optional(),
 });
-const ping = z.object({ t: z.literal('ping') });
+/** `rtt` is the phone's own measurement of its last ping/pong round trip, shown in the host's debug panel. */
+const ping = z.object({ t: z.literal('ping'), rtt: z.number().min(0).max(60_000).optional() });
 /** A player erasing their own data from the game (right to erasure). */
 const leave = z.object({ t: z.literal('leave') });
 const cmd = <T extends string>(t: T) => z.object({ t: z.literal(t) });
@@ -43,6 +44,7 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   cmd('skip'),
   cmd('extend'),
   cmd('end'),
+  cmd('debug'),
   z.object({ t: z.literal('kick'), playerId: z.string() }),
   z.object({ t: z.literal('overrideKick'), playerId: z.string() }),
   z.object({ t: z.literal('rename'), playerId: z.string(), nickname: z.string().max(NICKNAME_MAX * 4) }),
@@ -59,6 +61,7 @@ export const HOST_ONLY = new Set([
   'skip',
   'extend',
   'end',
+  'debug',
   'kick',
   'overrideKick',
   'rename',
@@ -201,6 +204,22 @@ export type ServerMsg =
   | (Base & { t: 'removed'; playerId: string; nickname: string; reason: 'strikes' | 'host' })
   | (Base & { t: 'ended' })
   | (Base & { t: 'left' })
+  | (Base & {
+      t: 'debug';
+      connected: number;
+      players: number;
+      messagesPerSec: number;
+      malformed: number;
+      /** How the last question closed and how long the server took from its trigger to the reveal being sent. */
+      lastClose: { index: number; ms: number; by: 'all-answered' | 'timer' | 'host' } | null;
+      clients: {
+        id: string;
+        nickname: string;
+        connected: boolean;
+        rttMs: number | null;
+        lastPingAgoMs: number | null;
+      }[];
+    })
   | (Base & { t: 'pong' })
   | (Base & { t: 'error'; code: ErrorCode; message: string });
 

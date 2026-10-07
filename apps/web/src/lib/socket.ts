@@ -67,6 +67,9 @@ export class GameSocket {
   private attempt = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private queue: string[] = [];
+  private pingSentAt: number | null = null;
+  /** Round trip of the last ping/pong, reported to the host's debug panel. */
+  rtt: number | undefined;
 
   constructor(
     private pin: string,
@@ -125,6 +128,10 @@ export class GameSocket {
       }
       if (msg.t === 'error' && ['not_found', 'ended', 'removed', 'forbidden'].includes(msg.code))
         this.closedByUs = true;
+      if (msg.t === 'pong' && this.pingSentAt !== null) {
+        this.rtt = Math.round(performance.now() - this.pingSentAt);
+        this.pingSentAt = null;
+      }
       if (msg.t === 'joined' && this.role === 'player') this.flush();
       useGame.getState().apply(msg);
     };
@@ -158,6 +165,7 @@ export class GameSocket {
   }
 
   send(msg: ClientMsg): void {
+    if (msg.t === 'ping') this.pingSentAt = performance.now();
     this.sendNow(msg);
   }
 
