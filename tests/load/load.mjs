@@ -220,10 +220,6 @@ const checks = [
     `reveal latency p95 < 500 ms (p50 ${Math.round(pct(stats.revealLatency, 50))}, p95 ${Math.round(pct(stats.revealLatency, 95))}, max ${Math.round(Math.max(...stats.revealLatency))} ms)`,
     pct(stats.revealLatency, 95) < 500,
   ],
-  [
-    `server-side reveal time p95 < 100 ms (p95 ${Math.round(pct(stats.serverCloseMs, 95))} ms)`,
-    stats.serverCloseMs.length > 0 && pct(stats.serverCloseMs, 95) < 100,
-  ],
   [`every phone received every question before answering (${stats.missedQuestion} missed)`, stats.missedQuestion === 0],
   [`results saved for all players`, podium.results.players.length === N],
 ];
@@ -233,7 +229,7 @@ console.log(
   `answer ack    p50 ${Math.round(pct(stats.ackLatency, 50))} ms  p95 ${Math.round(pct(stats.ackLatency, 95))} ms  max ${Math.round(Math.max(...stats.ackLatency))} ms`,
 );
 console.log(
-  `server-side   last answer → reveal sent (game room's own clock): p50 ${Math.round(pct(stats.serverCloseMs, 50))} ms  p95 ${Math.round(pct(stats.serverCloseMs, 95))} ms  max ${Math.round(Math.max(0, ...stats.serverCloseMs))} ms  (${stats.serverCloseMs.length} questions)`,
+  `server-side   last answer → reveal sent, I/O wait only (Workers freeze Date.now() while code runs, so 0 = no waiting, not zero CPU): p50 ${Math.round(pct(stats.serverCloseMs, 50))} ms  p95 ${Math.round(pct(stats.serverCloseMs, 95))} ms  max ${Math.round(Math.max(0, ...stats.serverCloseMs))} ms  (${stats.serverCloseMs.length} questions)`,
 );
 console.log(
   `traffic       ${stats.messagesOut} messages sent by players, ${stats.messagesIn} received (${(stats.bytesIn / 1024 / 1024).toFixed(1)} MiB)`,

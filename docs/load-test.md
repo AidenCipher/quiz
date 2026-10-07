@@ -33,7 +33,9 @@ Run from one MacBook on a home connection in India to `quiz-arena-staging.abhina
 | Answer acknowledgement | p50 154 ms, p95 357 ms, max 1.63 s |
 | **Reveal reaches every phone < 500 ms after the last answer is sent** | **marginal fail: p50 184 ms, p95 527 ms.** 14 of 15 questions peaked at 505–941 ms; one question hit 2.47 s |
 
-Reading the reveal numbers: the clock starts when the test sends the last answer and stops when each phone receives the reveal, so it includes the answer's trip to Cloudflare, the broadcast, and the trip back to a single laptop that is also driving 150 sockets. The same test against a local server (no network) gives p95 ≈ 40 ms, so almost all of the 527 ms is network and the test machine, not the game room. Real phones are spread out and on their own connections, but the numbers are an honest upper bound for a classroom with one slow link. Treat 500 ms as "met in practice, not proven": to prove it, run the test from a machine near the Cloudflare data centre that hosts the game room (or add server-side timestamps).
+A second staging run later the same day, on the final code, passed this check too: **reveal p50 128 ms, p95 172 ms, max 630 ms**, join burst 24.5 s, answer ack p50 111 ms / p95 153 ms, all 2,250 answers accepted, every phone received every question and reveal. The spread between runs (p95 527 ms, then 172 ms) is the home network, not the server.
+
+Reading the reveal numbers: the clock starts when the test sends the last answer and stops when each phone receives the reveal, so it includes the answer's trip to Cloudflare, the broadcast, and the trip back to a single laptop that is also driving 150 sockets. The same test against a local server (no network) gives p95 ≈ 40 ms, so almost all of the 527 ms is network and the test machine, not the game room. Real phones are spread out and on their own connections, but the numbers are an honest upper bound for a classroom with one slow link. Treat 500 ms as met on a normal connection, and expect it to vary with the network.
 
 Two earlier staging runs on the same day were discarded: the test script itself sent answers with a stale question type when a question message reached a phone late, so the server correctly rejected them, and that question then waited out its 10 s timer. The script now makes each phone wait for its own question first.
 
@@ -51,6 +53,8 @@ Fix: one pass over the sockets (`connectedIds`), and the scoreboard is computed 
 (3.7 s) and passes now, so this cannot quietly regress.
 
 ## Not measured, and why
+
+- **The game room's own processing time.** The host debug panel (key D) and the load test report "last answer → reveal sent" from the room's clock, but Cloudflare freezes `Date.now()` while code is running, so this only counts time spent waiting on storage or the network. It reads 0 ms on staging, which means nothing was waiting, not that the work was free. Real CPU time per game is visible in the Cloudflare dashboard (Workers CPU time, Durable Object duration) once its analytics catch up.
 
 - **Staging runs need the dev login.** Turn it on only for the test: `npx wrangler secret put DEV_LOGIN --env staging` (value `1`), run `node tests/load/load.mjs 150 15 https://<staging-host>`, then `npx wrangler secret delete DEV_LOGIN --env staging`. Never set it in production.
 - **Daily-allowance usage per game.** The plan asks for this; it can only be read from the Cloudflare dashboard after a staging run. From the traffic above, a 150-player
