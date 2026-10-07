@@ -39,7 +39,19 @@ Reading the reveal numbers: the clock starts when the test sends the last answer
 
 Two earlier staging runs on the same day were discarded: the test script itself sent answers with a stale question type when a question message reached a phone late, so the server correctly rejected them, and that question then waited out its 10 s timer. The script now makes each phone wait for its own question first.
 
-Cloudflare usage (account dashboard, four staging runs plus deployments that day): about 620 HTTP requests (roughly 190 per game, about 0.2% of the 100,000/day free allowance; WebSocket messages are counted separately), 1.5 s of Worker CPU in total, and about 10.5k Workers Logs events (about 3k per game, around 1.5% of the 200,000/day allowance). Durable Object duration, requests and SQL rows written had not appeared in the dashboard yet when this was written; update this section once they do.
+Cloudflare usage (dashboard, 7 October: five staging runs, four complete games and one that crashed after four questions, so about 4.4 games):
+
+| Metric | Total | Per 150-player, 15-question game | Free-plan daily allowance |
+| --- | --- | --- | --- |
+| Game-room messages handled | 12.11k | about 2.6k (WebSocket messages are billed 20:1 as requests, per the plan's pricing notes) | 100,000 requests |
+| SQL rows written | 11.46k | about 2.6k | 100,000 rows, so roughly 38 such games a day |
+| SQL rows read | 13.59k | about 3k | 5,000,000 |
+| Duration | 4.51 GB-sec | about 1 GB-sec | 13,000 GB-sec |
+| Errors | 755 | | |
+
+The 755 "errors" equal 5 runs × 151 connections (150 players plus the host). That matches each run's test script dropping its sockets when it exits, so this is most likely client disconnects, not game faults; it is an inference, not something Cloudflare labels. Other usage that day: about 620 HTTP requests (roughly 190 per game) and about 10.5k Workers Logs events (about 3k per game, around 1.5% of the 200,000/day allowance).
+
+Rows written is the tightest limit: a full 150-player game costs about 2.6% of the day's allowance, so about 38 of them fit in a day on the free plan (the plan estimated about 1,500 rows per game; the real figure is higher because joins, phase changes and flags also write). A typical 30–70 player class uses proportionally less.
 
 ## What the first run found
 
@@ -60,6 +72,5 @@ Fix: one pass over the sockets (`connectedIds`), and the scoreboard is computed 
 - **Daily-allowance usage per game.** The plan asks for this; it can only be read from the Cloudflare dashboard after a staging run. From the traffic above, a 150-player
   game is about 150 connections plus roughly 2,400 incoming messages (billed at 20 messages per request), well under the free plan's 100,000 requests/day.
 - **Storage writes on real Cloudflare.** Each answer is now saved as its own small key (`a:<question>:<player>`, about 40 bytes) instead of rewriting the whole game state. In a worker test with
-  100 players, 99 answers wrote 4 KB in total, against 3.06 MB (and 99 rewrites of the game record) before. A 150-player, 15-question game is about 2,250 small writes. Rows-written and
-  duration figures still need confirming on staging, but the volume no longer grows with players × questions.
+  100 players, 99 answers wrote 4 KB in total, against 3.06 MB (and 99 rewrites of the game record) before. A 150-player, 15-question game is about 2,250 small writes. The staging figures above confirm it: about 2.6k rows written per 150-player game.
 - Real phones, flaky Wi-Fi and the iOS tab-suspension behaviour are covered by the manual device checklist, not by this script.
