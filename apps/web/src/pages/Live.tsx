@@ -62,14 +62,22 @@ export default function Live() {
     if (phase?.t === 'reveal') sfx.reveal();
   }, [phase?.t, roster.length]);
 
+  const endAndGoHome = useCallback(() => {
+    send({ t: 'end' });
+    setTimeout(() => nav('/host'), 600);
+  }, [send, nav]);
+
   const primary = useCallback(() => {
     if (!phase) return;
     if (phase.t === 'lobby') send({ t: 'start' });
     else if (phase.t === 'reveal' || phase.t === 'leaderboard') send({ t: 'next' });
     else if (phase.t === 'question') send({ t: 'skip' });
     else if (phase.t === 'getready') send({ t: 'skip' });
-    else if (phase.t === 'podium') setTable((t) => !t);
-  }, [phase, send]);
+    else if (phase.t === 'podium') {
+      if (!table) setTable(true);
+      else endAndGoHome(); // the last screen: Space closes the game and returns to the dashboard
+    }
+  }, [phase, send, table, endAndGoHome]);
 
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -133,7 +141,7 @@ export default function Live() {
       case 'leaderboard':
         return phase.isLast ? 'Finish — podium (Space)' : 'Next question (Space)';
       case 'podium':
-        return table ? 'Back to podium (Space)' : 'Full results (Space)';
+        return table ? 'End game & go home (Space)' : 'Full results (Space)';
       default:
         return '…';
     }
@@ -222,13 +230,12 @@ export default function Live() {
                 ⬇ CSV
               </button>
             )}
-            <button
-              className="btn btn-danger"
-              onClick={() => {
-                send({ t: 'end' });
-                setTimeout(() => nav('/host'), 600);
-              }}
-            >
+            {table && (
+              <button className="btn btn-dark" onClick={() => setTable(false)}>
+                ← Back to podium
+              </button>
+            )}
+            <button className="btn btn-danger" onClick={endAndGoHome}>
               End game
             </button>
           </>

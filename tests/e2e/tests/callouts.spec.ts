@@ -27,6 +27,8 @@ test('a wrong answer is roasted on the phone and a spotlight line lands on the p
   // The projector shows the room spotlight a beat after the reveal.
   await expect(host.getByTestId('stage-callout')).toBeVisible();
   await expect(host.getByTestId('stage-callout')).not.toBeEmpty();
+  // Effects (fire, emoji rain, tumbleweed) play once and are removed: nothing piles up on the screen.
+  await expect(host.locator('.fx-layer')).toHaveCount(0, { timeout: 12_000 });
   await close();
 });
 

@@ -29,16 +29,23 @@ describe('the callout bank', () => {
       expect(line.emoji.length).toBeGreaterThan(0);
       if (kind !== 'allCorrect' && kind !== 'allWrong') expect(line.text, line.text).toContain('{name}');
       if (kind === 'streak') expect(line.text).toContain('{streak}');
-      if (line.ref) expect(line.ref, line.ref).toMatch(/^(Vine|Meme|Sound|Gaming): /);
+      if (line.ref)
+        expect(line.ref, line.ref).toMatch(/^(Vine|Meme|Sound|Gaming|Trend|Show|Movie|Insta|Slang|Bollywood): /);
     }
   });
   it('is big enough that rounds do not repeat quickly', () => {
     const count = (k: string) => ALL_LINES.filter((l) => l.kind === k).length;
-    expect(count('wrong')).toBeGreaterThanOrEqual(10);
-    expect(count('none')).toBeGreaterThanOrEqual(6);
-    expect(count('fast')).toBeGreaterThanOrEqual(5);
+    expect(count('wrong')).toBeGreaterThanOrEqual(40);
+    expect(count('none')).toBeGreaterThanOrEqual(18);
+    expect(count('fast')).toBeGreaterThanOrEqual(18);
+    expect(count('streak')).toBeGreaterThanOrEqual(14);
+    expect(count('allCorrect')).toBeGreaterThanOrEqual(8);
+    expect(count('allWrong')).toBeGreaterThanOrEqual(8);
+    expect(ALL_LINES.filter((l) => l.line.ref?.startsWith('Insta')).length).toBeGreaterThanOrEqual(10);
+    expect(ALL_LINES.filter((l) => l.line.ref?.startsWith('Slang')).length).toBeGreaterThanOrEqual(15);
+    expect(ALL_LINES.some((l) => l.line.ref?.startsWith('Bollywood'))).toBe(true);
     expect(ALL_LINES.filter((l) => l.line.ref?.startsWith('Vine')).length).toBeGreaterThanOrEqual(4);
-    expect(LOCK_IN_QUIPS.length).toBeGreaterThanOrEqual(5);
+    expect(LOCK_IN_QUIPS.length).toBeGreaterThanOrEqual(12);
   });
 });
 
@@ -114,11 +121,11 @@ describe('computeCallouts', () => {
     expect(tiny.spotlight).toBeNull(); // two correct players: nothing to say, and that is fine
   });
 
-  it('celebrates fast answers and streaks of three or more', () => {
+  it('celebrates fast answers and streak milestones', () => {
     const r = computeCallouts({
       seed: 'x',
       players: [
-        p('a', 'right', { tMs: 800, streak: 4 }),
+        p('a', 'right', { tMs: 800, streak: 5 }),
         p('b', 'right'), // two players only: no group moment, so the spotlight must go to the streak holder
       ],
       limitMs: 20000,
@@ -130,11 +137,11 @@ describe('computeCallouts', () => {
     // a streak line carries the streak length
     const streakLine = computeCallouts({
       seed: 'x2',
-      players: [p('a', 'right', { tMs: 15000, streak: 4 }), p('b', 'right', { tMs: 15000 })],
+      players: [p('a', 'right', { tMs: 15000, streak: 5 }), p('b', 'right', { tMs: 15000 })],
       limitMs: 20000,
     });
     expect(streakLine.spotlight!.kind).toBe('streak');
-    expect(streakLine.spotlight!.text).toContain('4');
+    expect(streakLine.spotlight!.text).toContain('5');
   });
 
   it('ignores voided answers (the flag already told that story)', () => {
@@ -152,6 +159,52 @@ describe('computeCallouts', () => {
       spotlight: null,
       personal: new Map(),
     });
+  });
+});
+
+describe('variety', () => {
+  const room = [p('a', 'right'), p('b', 'wrong'), p('c', 'none'), p('d', 'right'), p('e', 'wrong')];
+
+  it('never repeats a player’s personal line on consecutive questions, or within a full bank walk', () => {
+    const seen: string[] = [];
+    for (let q = 0; q < 30; q++) {
+      const r = computeCallouts({ seed: '123456', index: q, players: room, limitMs: 20000 });
+      seen.push(r.personal.get('b')!.text.replace('P-b', '{name}'));
+    }
+    for (let i = 1; i < seen.length; i++) expect(seen[i]).not.toBe(seen[i - 1]);
+    expect(new Set(seen).size).toBeGreaterThanOrEqual(26); // almost no repeats in thirty questions
+  });
+
+  it('never plays the same spotlight line twice in a row across a game', () => {
+    let prev = '';
+    for (let q = 0; q < 40; q++) {
+      const s = computeCallouts({ seed: '123456', index: q, players: room, limitMs: 20000 }).spotlight!;
+      const text = s.text.replace(/P-[a-e]/, '{name}');
+      if (s.kind === 'wrong') {
+        expect(text).not.toBe(prev);
+        prev = text;
+      }
+    }
+  });
+
+  it('only calls out a streak at milestones, not on every question of it', () => {
+    const streakFor = (n: number) =>
+      computeCallouts({
+        seed: 'g',
+        index: n,
+        players: [p('a', 'right', { streak: n }), p('b', 'right'), p('c', 'right', { tMs: 15000 })],
+        limitMs: 20000,
+      });
+    for (const n of [1, 2, 4, 6, 8, 9, 11, 12, 13, 14])
+      expect(streakFor(n).personal.has('a'), `streak ${n}`).toBe(false);
+    for (const n of [3, 5, 7, 10, 15, 20]) expect(streakFor(n).personal.get('a')!.kind, `streak ${n}`).toBe('streak');
+  });
+
+  it('shuffles differently for different games', () => {
+    const lines = ['111111', '222222', '333333', '444444'].map(
+      (seed) => computeCallouts({ seed, index: 0, players: room, limitMs: 20000 }).personal.get('b')!.text,
+    );
+    expect(new Set(lines).size).toBeGreaterThan(1);
   });
 });
 

@@ -777,13 +777,35 @@ button.tile:active:not(:disabled) {
   }
 }
 @keyframes emoji-rain {
-  from {
+  0% {
     transform: translateY(-12vh) rotate(0deg);
+    opacity: 0;
+  }
+  8% {
     opacity: 1;
   }
-  to {
+  80% {
+    opacity: 1;
+  }
+  100% {
     transform: translateY(105vh) rotate(var(--spin, 360deg));
-    opacity: 0.9;
+    opacity: 0;
+  }
+}
+@keyframes emoji-rise {
+  0% {
+    transform: translate(0, 6vh) scale(0.5);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--sway, 0px), -75vh) scale(1.25);
+    opacity: 0;
   }
 }
 
@@ -991,6 +1013,7 @@ button.tile:active:not(:disabled) {
   position: absolute;
   top: 0;
   animation: emoji-rain var(--fall, 3s) linear both;
+  opacity: 0;
 }
 
 /* ---- responsive page frame ---- */

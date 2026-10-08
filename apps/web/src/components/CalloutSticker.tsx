@@ -1,5 +1,5 @@
 import type { Callout } from '@quiz/shared/callouts';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Hoot } from './Hoot';
 
 type Size = 'stage' | 'phone' | 'home';
@@ -90,6 +90,7 @@ export function CalloutFx({ callout, big = false }: { callout: Callout; big?: bo
         delay: ((i * 53) % 12) / 10,
         spin: (i % 2 ? 1 : -1) * (180 + ((i * 41) % 360)),
         size: (big ? 54 : 28) + ((i * 29) % 20),
+        sway: `${(i % 2 ? 1 : -1) * (20 + ((i * 17) % 60))}px`,
       })),
     [fx, big, callout.id],
   );
@@ -102,7 +103,14 @@ export function CalloutFx({ callout, big = false }: { callout: Callout; big?: bo
       document.documentElement.classList.remove('fx-shake');
     };
   }, [fx, callout.id]);
-  if (!fx) return null;
+  // Nothing lingers: the whole layer is removed once the effect has played out.
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    setDone(false);
+    const t = setTimeout(() => setDone(true), fx === 'tumbleweed' ? 5200 : 4800);
+    return () => clearTimeout(t);
+  }, [callout.id, fx]);
+  if (!fx || done) return null;
   return (
     <div className="fx-layer" aria-hidden="true">
       {fx === 'boom' && (
@@ -147,7 +155,7 @@ export function CalloutFx({ callout, big = false }: { callout: Callout; big?: bo
           ))}
         </div>
       )}
-      {(fx === 'rain' || fx === 'fire') &&
+      {fx === 'rain' &&
         bits.map((b, i) => (
           <span
             key={i}
@@ -156,11 +164,29 @@ export function CalloutFx({ callout, big = false }: { callout: Callout; big?: bo
               top: 0,
               left: b.left,
               fontSize: b.size,
+              opacity: 0,
               animation: `emoji-rain ${b.fall}s linear ${b.delay}s both`,
               ['--spin' as string]: `${b.spin}deg`,
             }}
           >
-            {fx === 'fire' ? '🔥' : callout.emoji}
+            {callout.emoji}
+          </span>
+        ))}
+      {fx === 'fire' &&
+        bits.map((b, i) => (
+          <span
+            key={i}
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: b.left,
+              fontSize: b.size,
+              opacity: 0,
+              animation: `emoji-rise ${b.fall + 0.6}s ease-out ${b.delay}s both`,
+              ['--sway' as string]: b.sway,
+            }}
+          >
+            🔥
           </span>
         ))}
     </div>

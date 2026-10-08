@@ -50,6 +50,30 @@ describe('buildPrompt', () => {
     expect(p).toContain('ONLY one JSON object');
     expect(p).toContain('{"questions":[');
   });
+  it('is a structured brief: role, context, quality standard, type rules, self-check and output format', () => {
+    const p = buildPrompt(req({ types: ['mcq', 'tf', 'text'] }));
+    for (const heading of [
+      '# ROLE',
+      '# CONTEXT',
+      '# TASK',
+      '# QUALITY STANDARD',
+      '# TYPE RULES',
+      '# SELF-CHECK',
+      '# OUTPUT FORMAT',
+    ])
+      expect(p).toContain(heading);
+    expect(p).toMatch(/under 140 characters/);
+    expect(p).toMatch(/exactly 4 options/);
+    expect(p).toMatch(/distractor/);
+    expect(p).toMatch(/negative phrasing/);
+    expect(p).toContain('"explanation"');
+    expect(p).toContain('exactly 8');
+    // type rules only appear for the allowed types
+    const mcqOnly = buildPrompt(req({ types: ['mcq'] }));
+    expect(mcqOnly).toContain('Multiple choice ("mcq")');
+    expect(mcqOnly).not.toContain('True/false ("tf"):');
+    expect(mcqOnly).not.toContain('Type-the-answer ("text"):');
+  });
   it('handles mixed difficulty, extra types, audience and language', () => {
     const p = buildPrompt(
       req({ difficulty: 'mixed', types: ['mcq', 'tf', 'text'], audience: 'Class 8 students', language: 'Hindi' }),
@@ -107,6 +131,18 @@ describe('parseGenerated', () => {
     expect(b!.correctIndex).toBe(1); // false
     expect(c!.acceptedAnswers).toEqual(['Mumbai', 'Bombay']);
     expect(r.questions[0]!.topic).toBe('Solar system');
+  });
+
+  it('keeps Claude’s one-line explanation for the host to review', () => {
+    const r = parseGenerated(
+      reply([
+        mcq('Which planet is red?', ['Venus', 'Mars', 'Jupiter', 'Mercury'], 1, {
+          explanation: 'Iron oxide on its surface.',
+        }),
+      ]),
+    );
+    expect(r.questions[0]!.explanation).toBe('Iron oxide on its surface.');
+    expect(parseGenerated(reply([mcq('Another one?')])).questions[0]!.explanation).toBeUndefined();
   });
 
   it('shuffles options but always keeps the right answer marked', () => {

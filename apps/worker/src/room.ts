@@ -1122,7 +1122,8 @@ export class GameRoom extends DurableObject<Env> {
       .slice(-3)
       .map((h) => h.id);
     const result = computeCallouts({
-      seed: `${s.pin}:${i}`,
+      seed: s.pin,
+      index: i,
       players,
       limitMs: s.limits[i] ?? this.questions[i]!.timeLimitS * 1000,
       avoid: recent,

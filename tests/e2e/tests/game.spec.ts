@@ -83,8 +83,13 @@ test('host and five players play a full game', async ({ browser }) => {
   ]);
   expect(download.suggestedFilename()).toBe(`quiz-results-${pin}.csv`);
 
+  // The results are the last screen: Space closes the game and goes back to the dashboard (the podium is one click back).
   await host.mouse.move(420, 420);
-  await host.getByRole('button', { name: 'End game' }).click();
+  await host.getByRole('button', { name: /Back to podium/ }).click();
+  await expect(host.getByText('🏆 Podium')).toBeVisible();
+  await hostNext(host); // podium → full results
+  await expect(host.getByRole('table')).toBeVisible();
+  await hostNext(host); // full results → end game and go home
   await expect(host).toHaveURL(/\/host$/);
   await expect(host.getByText('Past games')).toBeVisible();
   await host.getByRole('link', { name: 'View' }).first().click();

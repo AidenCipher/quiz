@@ -62,7 +62,27 @@ export function buildPrompt(req: GenerateRequest): string {
       ? `Mixed. ${DIFFICULTY_HELP.mixed} Put the right "difficulty" on every question.`
       : `${req.difficulty[0]!.toUpperCase()}${req.difficulty.slice(1)}. ${DIFFICULTY_HELP[req.difficulty]}`;
   const mix = req.types.length > 1 ? ' Use a sensible mix of the allowed types.' : '';
-  return `You are writing questions for a live quiz game that is shown on a projector in a classroom or at an event.
+  const typeRules: string[] = [];
+  if (req.types.includes('mcq'))
+    typeRules.push(
+      '- Multiple choice ("mcq"): exactly 4 options, each under 40 characters. Exactly one is correct. Write the three distractors so each is a believable mistake (a common misconception, a near miss, or the right answer to a similar question), the same part of speech, grammar and rough length as the correct option. No "all of the above", "none of the above" or "both A and B". No option may be a partial duplicate of another, and none may give the answer away by being the longest, the most detailed or the only one that fits the sentence. Put the correct answer in different positions across the set.',
+    );
+  if (req.types.includes('tf'))
+    typeRules.push(
+      '- True/false ("tf"): one self-contained statement that is unambiguously true or false to an expert. Avoid absolutes ("always", "never", "only") as giveaways, double negatives, and statements that are only true "in some cases". Make roughly half of them false, and make the false ones plausible, not absurd.',
+    );
+  if (req.types.includes('text'))
+    typeRules.push(
+      '- Type-the-answer ("text"): the question must have one short answer (one word, a name, a number, or a phrase under 40 characters) that cannot be phrased in many valid ways. In "accepted" list 1 to 5 variants a player might type: spellings, common abbreviations, with and without "the", and synonyms the host would mark correct. Write numbers as digits. Do not require special characters or accents to be typed correctly.',
+    );
+  return `# ROLE
+You are an experienced assessment designer and quiz writer. You write accurate, fair, engaging questions, and you would rather deliver fewer questions than include a doubtful one.
+
+# CONTEXT
+The questions are for a live quiz game that is shown on a projector in a classroom or at an event. Players answer on their phones against a timer (10 to 60 seconds), so every question must be readable in a few seconds and answerable from knowledge alone, with nothing to look up and no need to see an image.
+
+# TASK
+Write quiz questions using exactly these inputs.
 
 Topics (cover them roughly evenly):
 ${topics}
@@ -71,21 +91,42 @@ Difficulty: ${difficulty}
 Number of questions: ${req.count}
 Allowed question types: ${types}.${mix}${req.audience ? `\nAudience: ${req.audience}` : ''}${req.language ? `\nWrite in: ${req.language}` : ''}
 
-Rules:
-- Every question needs exactly one clearly correct answer that you are confident is factually right and unlikely to change. If you are not sure of a fact, write a different question instead.
-- Keep each question under 140 characters. Plain text only: no markdown, no images, no "all of the above" or "none of the above".
-- Multiple choice: exactly 4 short options (under 40 characters each) with plausible wrong answers written in the same style and length. Vary which position holds the correct answer.
-- True/false: a statement that is unambiguously true or false. Make roughly half of them false.
-- Type-the-answer: the answer is one word or a short phrase. In "accepted" list up to 3 accepted spellings or synonyms. Write numbers as digits.
-- No duplicate or near-duplicate questions, and no questions about the quiz itself.
+# QUALITY STANDARD
+Accuracy
+- Every question has exactly one clearly correct answer that you are confident is factually right, widely documented and unlikely to change. If you are not certain of a fact, write a different question instead of guessing.
+- Avoid time-sensitive facts ("current", "latest", "newest", "as of this year"): they go stale. Use settled facts, or name the year.
+- Avoid questions that depend on opinion, a single disputed source, or a definition that differs between countries or textbooks.
+Clarity
+- Keep each question under 140 characters. Plain text only: no markdown, no emoji, no images, no references to other questions.
+- One idea per question, written as a direct question or a clear statement. Do not use "Which of the following is NOT…" or other negative phrasing.
+- Do not hide the answer inside the question: no wording, grammar or clue should point to the right option.
+Cognitive level
+- Match the difficulty. Easy: recall and recognition of well-known facts. Medium: understanding, one step of reasoning or connecting two facts. Hard: application, comparison or subtle distinctions that a strong player still has to think about.
+- Hard means more demanding, not more obscure: never rely on trivia that nobody could reasonably know.
+Fairness and tone
+- Use inclusive, neutral wording that does not assume a country, culture, gender or background beyond the audience stated above. Keep content age-appropriate for that audience and avoid graphic, political or sensitive material unless a topic asks for it.
+Variety
+- Cover each topic about equally, vary the question stems (what, which, who, when, how many, why), and spread the difficulty as asked. No duplicate or near-duplicate questions, and no questions about the quiz itself.
 
-Reply with ONLY one JSON object: no introduction, no explanation, no markdown code fences. Use exactly this shape:
+# TYPE RULES
+${typeRules.join('\n')}
+
+# SELF-CHECK BEFORE YOU REPLY
+Silently go through every question and fix or replace it if any answer is "no":
+1. Am I certain of the correct answer, and is it the only defensible one?
+2. Is it under 140 characters and free of clues and negative phrasing?
+3. Are the distractors plausible and similar in length and style to the correct answer?
+4. Does it match the requested difficulty and topic?
+5. Is it different from every other question? Is the number of questions exactly ${req.count}? (Return fewer only if you cannot write that many that meet every rule. Never pad with weak ones.)
+
+# OUTPUT FORMAT
+Reply with ONLY one JSON object: no introduction, no explanation outside the JSON, no markdown code fences. It must be valid JSON (double quotes, no trailing commas, no comments). Use exactly this shape:
 {"questions":[
-{"topic":"…","difficulty":"easy","type":"mcq","text":"…","options":["…","…","…","…"],"correct":1},
-{"topic":"…","difficulty":"medium","type":"tf","text":"…","correct":true},
-{"topic":"…","difficulty":"hard","type":"text","text":"…","accepted":["…","…"]}
+{"topic":"…","difficulty":"easy","type":"mcq","text":"…","options":["…","…","…","…"],"correct":1,"explanation":"…"},
+{"topic":"…","difficulty":"medium","type":"tf","text":"…","correct":true,"explanation":"…"},
+{"topic":"…","difficulty":"hard","type":"text","text":"…","accepted":["…","…"],"explanation":"…"}
 ]}
-"difficulty" is "easy", "medium" or "hard". For "mcq", "correct" is the zero-based position (0 to 3) of the right option. For "tf", "correct" is true or false.`;
+"topic" is one of the topics above, worded the same way. "difficulty" is "easy", "medium" or "hard". For "mcq", "correct" is the zero-based position (0 to 3) of the right option. For "tf", "correct" is true or false. "explanation" is one sentence (under 160 characters) stating why the answer is right, so the host can verify it quickly.`;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -129,6 +170,8 @@ export interface GeneratedQuestion {
   question: Question;
   topic?: string;
   difficulty?: 'easy' | 'medium' | 'hard';
+  /** Claude's one-line reason the answer is right, shown to the host while reviewing. */
+  explanation?: string;
 }
 export interface ParseProblem {
   /** 1-based position in Claude's reply */
@@ -253,7 +296,8 @@ function toQuestion(
 
   const parsed = QuestionSchema.safeParse(base);
   if (!parsed.success) return { ok: false, reason: parsed.error.issues[0]?.message ?? 'not a valid question' };
-  return { ok: true, value: { question: parsed.data, topic: str(raw.topic) || undefined, difficulty } };
+  const explanation = str(raw.explanation ?? raw.rationale).slice(0, 200) || undefined;
+  return { ok: true, value: { question: parsed.data, topic: str(raw.topic) || undefined, difficulty, explanation } };
 }
 
 /**

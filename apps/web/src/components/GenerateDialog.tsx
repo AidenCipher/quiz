@@ -421,6 +421,11 @@ export function GenerateDialog({
                                 Accepted: <b>{q.acceptedAnswers.join(' · ')}</b>
                               </div>
                             )}
+                            {g.explanation && (
+                              <div style={{ fontSize: 13, color: 'var(--ink-muted)', marginTop: 4 }}>
+                                Why: {g.explanation}
+                              </div>
+                            )}
                           </span>
                         </label>
                       </li>
