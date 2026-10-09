@@ -18,12 +18,38 @@ const req = (over: Partial<GenerateRequest> = {}): GenerateRequest => ({
 });
 
 describe('parseTopics', () => {
-  it('splits lines and commas, strips bullets and numbering, drops blanks and duplicates', () => {
-    expect(parseTopics('Indian history\n- Solar system, solar system\n 3) Photosynthesis ;\n\n')).toEqual([
+  it('reads one topic per line, stripping bullets and numbering and dropping blanks and duplicates', () => {
+    expect(parseTopics('Indian history\n- Solar system\n 3) Photosynthesis ;\n\nsolar SYSTEM')).toEqual([
       'Indian history',
       'Solar system',
       'Photosynthesis',
     ]);
+  });
+  it('keeps commas inside a line: ten multi-word topics are ten topics', () => {
+    const ten = Array.from(
+      { length: 10 },
+      (_, i) => `Topic ${i + 1}: the causes, effects and legacy of event number ${i + 1}`,
+    );
+    const topics = parseTopics(ten.join('\n'));
+    expect(topics).toHaveLength(10);
+    expect(topics[0]).toBe('Topic 1: the causes, effects and legacy of event number 1');
+    expect(GenerateRequestSchema.safeParse(req({ topics })).success).toBe(true);
+  });
+  it('reads a single line as a comma or semicolon separated list', () => {
+    expect(parseTopics('Algebra, Geometry; Trigonometry , Calculus')).toEqual([
+      'Algebra',
+      'Geometry',
+      'Trigonometry',
+      'Calculus',
+    ]);
+    expect(parseTopics('The French Revolution')).toEqual(['The French Revolution']);
+    expect(parseTopics('')).toEqual([]);
+  });
+  it('accepts long descriptive topics (not limited to ten words)', () => {
+    const long =
+      'The political, economic and social consequences of the partition of India in 1947 for the Punjab region';
+    expect(long.length).toBeGreaterThan(80);
+    expect(GenerateRequestSchema.safeParse(req({ topics: [long] })).success).toBe(true);
   });
 });
 

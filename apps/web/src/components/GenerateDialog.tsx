@@ -152,7 +152,7 @@ export function GenerateDialog({
             </p>
             <div>
               <label className="label" htmlFor="gen-topics">
-                Topics (one per line or separated by commas, up to {MAX_TOPICS})
+                Topics (one per line, up to {MAX_TOPICS}; a single line can be a comma-separated list)
               </label>
               <textarea
                 id="gen-topics"
@@ -163,8 +163,16 @@ export function GenerateDialog({
                 placeholder={'The Mughal Empire\nPhotosynthesis\nIndian cricket records'}
                 data-autofocus
               />
-              <div style={{ fontSize: 13, color: 'var(--ink-muted)', marginTop: 4 }}>
-                {topics.length} topic{topics.length === 1 ? '' : 's'}
+              <div
+                style={{
+                  fontSize: 13,
+                  marginTop: 4,
+                  color: topics.length > MAX_TOPICS ? 'var(--bad)' : 'var(--ink-muted)',
+                  fontWeight: topics.length > MAX_TOPICS ? 700 : 400,
+                }}
+              >
+                {topics.length} of {MAX_TOPICS} topics
+                {topics.length > MAX_TOPICS && ` — remove ${topics.length - MAX_TOPICS}`}
               </div>
             </div>
 

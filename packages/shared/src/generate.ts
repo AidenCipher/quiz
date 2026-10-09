@@ -18,7 +18,7 @@ export const DIFFICULTY_HELP: Record<Difficulty, string> = {
 };
 
 export const MAX_TOPICS = 10;
-export const MAX_TOPIC_LENGTH = 80;
+export const MAX_TOPIC_LENGTH = 200;
 export const MAX_PASTE_LENGTH = 200_000;
 
 export const GenerateRequestSchema = z.object({
@@ -31,13 +31,23 @@ export const GenerateRequestSchema = z.object({
 });
 export type GenerateRequest = z.infer<typeof GenerateRequestSchema>;
 
-/** One topic per line, or comma separated; blanks and duplicates dropped. */
+/**
+ * Splits the topics box into topics. With more than one line, every line is one topic (so a topic may contain
+ * commas, like "Indian freedom struggle, 1857 to 1947"). A single line is read as a comma or semicolon separated
+ * list. Bullets and numbering are stripped; blanks and duplicates are dropped.
+ */
 export function parseTopics(input: string): string[] {
+  const lines = input
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const parts = lines.length > 1 ? lines : (lines[0]?.split(/[,;]+/) ?? []);
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const part of input.split(/[\n,;]+/)) {
+  for (const part of parts) {
     const t = part
       .replace(/^[\s\-*•\d.)]+/, '')
+      .replace(/[\s;,]+$/, '')
       .replace(/\s+/g, ' ')
       .trim();
     if (t && !seen.has(t.toLowerCase())) {

@@ -101,8 +101,8 @@ test('write questions with Claude: topics + difficulty → prompt → paste repl
   await dialog.getByRole('button', { name: 'Create prompt' }).click();
   await expect(dialog.getByRole('alert')).toContainText('Add at least one topic');
 
-  await dialog.getByLabel(/Topics/).fill('Solar system\nIndian history, Solar system');
-  await expect(dialog.getByText('2 topics')).toBeVisible(); // duplicate dropped
+  await dialog.getByLabel(/Topics/).fill('Solar system\nIndian history\nsolar system');
+  await expect(dialog.getByText('2 of 10 topics')).toBeVisible(); // duplicate dropped
   await dialog.getByRole('radio', { name: 'Hard' }).click();
   await expect(dialog.getByText(/Detailed or specialised knowledge/)).toBeVisible();
   await dialog.getByLabel('Number of questions').selectOption('5');
@@ -207,5 +207,24 @@ test('the whole generator works from the keyboard and keeps focus inside the dia
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(opener).toBeFocused();
+  await context.close();
+});
+
+test('ten topics means ten topics, however many words each one has; an eleventh is refused', async ({ browser }) => {
+  const { context, page } = await openEditor(browser);
+  await page.getByRole('button', { name: /Write questions with Claude/ }).click();
+  const dialog = page.getByRole('dialog', { name: /Write questions with Claude/ });
+  const topic = (i: number) => `Topic ${i}: the causes, effects and long-term legacy of event number ${i}, in detail`;
+  const ten = Array.from({ length: 10 }, (_, i) => topic(i + 1));
+  await dialog.getByLabel(/Topics/).fill(ten.join('\n'));
+  await expect(dialog.getByText('10 of 10 topics')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Create prompt' }).click();
+  await expect(dialog.getByText('Step 2 of 3')).toBeVisible();
+  await expect(dialog.getByLabel('Prompt for Claude')).toHaveValue(/10\. Topic 10: the causes, effects/);
+  await dialog.getByRole('button', { name: /Back/ }).click();
+  await dialog.getByLabel(/Topics/).fill([...ten, topic(11)].join('\n'));
+  await expect(dialog.getByText(/11 of 10 topics — remove 1/)).toBeVisible();
+  await dialog.getByRole('button', { name: 'Create prompt' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('at most 10 topics');
   await context.close();
 });
